@@ -4,6 +4,10 @@ Who works with whom in Taiwan’s economics research community, and how do those
 
 This side project brings together faculty rosters, publication records and research projects to explore that question. It follows two kinds of collaboration from 2015 to 2026: writing a paper together and participating in the same research project. An interactive map connects these networks to the institutions where researchers work.
 
+## Live Demo
+
+[Open the interactive Taiwan Economics Collaboration Map](https://laipohsun.github.io/taiwan-economics-collaboration/)
+
 ## Open the map
 
 Download this repository using **Code → Download ZIP**, extract it, and open [`index.html`](index.html) in a browser. You can also open [`html/map_explorer.html`](html/map_explorer.html) directly. No installation, Python environment or server is needed. GitHub’s file viewer displays the HTML source; download the file or use a GitHub Pages deployment to interact with it.
