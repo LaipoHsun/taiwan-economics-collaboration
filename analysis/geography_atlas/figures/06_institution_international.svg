@@ -1,0 +1,706 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="728.39952pt" height="584.39952pt" viewBox="0 0 728.39952 584.39952" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-09-11T17:37:23.914215</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.9.4, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 584.39952 
+L 728.39952 584.39952 
+L 728.39952 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 186.242969 546.84327 
+L 706.904989 546.84327 
+L 706.904989 22.318125 
+L 186.242969 22.318125 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <defs>
+       <path id="mdea5b741b0" d="M 0 0 
+L 0 3.5 
+" style="stroke: #000000; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#mdea5b741b0" x="186.242969" y="546.84327" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_1">
+      <text style="font: 10px 'DejaVu Sans'; text-anchor: middle" x="186.242969" y="561.441708" transform="rotate(-0 186.242969 561.441708)">0%</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_2">
+      <g>
+       <use xlink:href="#mdea5b741b0" x="290.375373" y="546.84327" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_2">
+      <text style="font: 10px 'DejaVu Sans'; text-anchor: middle" x="290.375373" y="561.441708" transform="rotate(-0 290.375373 561.441708)">20%</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_3">
+      <g>
+       <use xlink:href="#mdea5b741b0" x="394.507777" y="546.84327" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_3">
+      <text style="font: 10px 'DejaVu Sans'; text-anchor: middle" x="394.507777" y="561.441708" transform="rotate(-0 394.507777 561.441708)">40%</text>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_4">
+      <g>
+       <use xlink:href="#mdea5b741b0" x="498.640181" y="546.84327" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_4">
+      <text style="font: 10px 'DejaVu Sans'; text-anchor: middle" x="498.640181" y="561.441708" transform="rotate(-0 498.640181 561.441708)">60%</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_5">
+      <g>
+       <use xlink:href="#mdea5b741b0" x="602.772585" y="546.84327" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_5">
+      <text style="font: 10px 'DejaVu Sans'; text-anchor: middle" x="602.772585" y="561.441708" transform="rotate(-0 602.772585 561.441708)">80%</text>
+     </g>
+    </g>
+    <g id="xtick_6">
+     <g id="line2d_6">
+      <g>
+       <use xlink:href="#mdea5b741b0" x="706.904989" y="546.84327" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_6">
+      <text style="font: 10px 'DejaVu Sans'; text-anchor: middle" x="706.904989" y="561.441708" transform="rotate(-0 706.904989 561.441708)">100%</text>
+     </g>
+    </g>
+    <g id="text_7">
+     <text style="font: 10px 'DejaVu Sans'; text-anchor: middle" x="446.573979" y="575.119833" transform="rotate(-0 446.573979 575.119833)">Fractional paper share: known overseas to unresolved upper bound</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_7">
+      <defs>
+       <path id="mb420e359af" d="M 0 0 
+L -3.5 0 
+" style="stroke: #000000; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="523.001218" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_8">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="526.646218" transform="rotate(-0 179.242969 526.646218)">1021 真理大學</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_8">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="504.661178" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_9">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="508.306178" transform="rotate(-0 179.242969 508.306178)">0012 國立臺灣海洋大學</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_9">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="486.321138" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_10">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="489.966138" transform="rotate(-0 179.242969 489.966138)">1015 世新大學</text>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_10">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="467.981098" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_11">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="471.626098" transform="rotate(-0 179.242969 471.626098)">0021 國立暨南國際大學</text>
+     </g>
+    </g>
+    <g id="ytick_5">
+     <g id="line2d_11">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="449.641058" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_12">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="453.286058" transform="rotate(-0 179.242969 453.286058)">1002 輔仁大學學校財團法人輔仁大學</text>
+     </g>
+    </g>
+    <g id="ytick_6">
+     <g id="line2d_12">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="431.301018" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_13">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="434.946018" transform="rotate(-0 179.242969 434.946018)">1006 中國文化大學</text>
+     </g>
+    </g>
+    <g id="ytick_7">
+     <g id="line2d_13">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="412.960978" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_14">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="416.605978" transform="rotate(-0 179.242969 416.605978)">AS02 中央研究院人文社會科學研究中心</text>
+     </g>
+    </g>
+    <g id="ytick_8">
+     <g id="line2d_14">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="394.620938" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_15">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="398.265938" transform="rotate(-0 179.242969 398.265938)">1001 東海大學</text>
+     </g>
+    </g>
+    <g id="ytick_9">
+     <g id="line2d_15">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="376.280898" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_16">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="379.925898" transform="rotate(-0 179.242969 379.925898)">0008 國立中央大學</text>
+     </g>
+    </g>
+    <g id="ytick_10">
+     <g id="line2d_16">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="357.940858" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_17">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="361.585858" transform="rotate(-0 179.242969 361.585858)">1016 銘傳大學</text>
+     </g>
+    </g>
+    <g id="ytick_11">
+     <g id="line2d_17">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="339.600818" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_18">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="343.245818" transform="rotate(-0 179.242969 343.245818)">0009 國立中山大學</text>
+     </g>
+    </g>
+    <g id="ytick_12">
+     <g id="line2d_18">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="321.260778" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_19">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="324.905778" transform="rotate(-0 179.242969 324.905778)">0018 國立嘉義大學</text>
+     </g>
+    </g>
+    <g id="ytick_13">
+     <g id="line2d_19">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="302.920738" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_20">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="306.565738" transform="rotate(-0 179.242969 306.565738)">0017 國立臺北大學</text>
+     </g>
+    </g>
+    <g id="ytick_14">
+     <g id="line2d_20">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="284.580697" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_21">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="288.225697" transform="rotate(-0 179.242969 288.225697)">0006 國立中興大學</text>
+     </g>
+    </g>
+    <g id="ytick_15">
+     <g id="line2d_21">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="266.240657" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_22">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="269.885657" transform="rotate(-0 179.242969 269.885657)">1005 淡江大學學校財團法人淡江大學</text>
+     </g>
+    </g>
+    <g id="ytick_16">
+     <g id="line2d_22">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="247.900617" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_23">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="251.545617" transform="rotate(-0 179.242969 251.545617)">0031 國立宜蘭大學</text>
+     </g>
+    </g>
+    <g id="ytick_17">
+     <g id="line2d_23">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="229.560577" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_24">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="233.205577" transform="rotate(-0 179.242969 233.205577)">0005 國立成功大學</text>
+     </g>
+    </g>
+    <g id="ytick_18">
+     <g id="line2d_24">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="211.220537" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_25">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="214.865537" transform="rotate(-0 179.242969 214.865537)">1007 逢甲大學</text>
+     </g>
+    </g>
+    <g id="ytick_19">
+     <g id="line2d_25">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="192.880497" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_26">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="196.525497" transform="rotate(-0 179.242969 196.525497)">0001 國立政治大學</text>
+     </g>
+    </g>
+    <g id="ytick_20">
+     <g id="line2d_26">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="174.540457" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_27">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="178.185457" transform="rotate(-0 179.242969 178.185457)">0020 國立東華大學</text>
+     </g>
+    </g>
+    <g id="ytick_21">
+     <g id="line2d_27">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="156.200417" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_28">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="159.845417" transform="rotate(-0 179.242969 159.845417)">0013 國立中正大學</text>
+     </g>
+    </g>
+    <g id="ytick_22">
+     <g id="line2d_28">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="137.860377" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_29">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="141.505377" transform="rotate(-0 179.242969 141.505377)">AS01 中央研究院經濟研究所</text>
+     </g>
+    </g>
+    <g id="ytick_23">
+     <g id="line2d_29">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="119.520337" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_30">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="123.165337" transform="rotate(-0 179.242969 123.165337)">0002 國立清華大學</text>
+     </g>
+    </g>
+    <g id="ytick_24">
+     <g id="line2d_30">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="101.180297" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_31">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="104.825297" transform="rotate(-0 179.242969 104.825297)">0019 國立高雄大學</text>
+     </g>
+    </g>
+    <g id="ytick_25">
+     <g id="line2d_31">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="82.840257" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_32">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="86.485257" transform="rotate(-0 179.242969 86.485257)">0003 國立臺灣大學</text>
+     </g>
+    </g>
+    <g id="ytick_26">
+     <g id="line2d_32">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="64.500217" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_33">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="68.145217" transform="rotate(-0 179.242969 68.145217)">1050 佛光大學</text>
+     </g>
+    </g>
+    <g id="ytick_27">
+     <g id="line2d_33">
+      <g>
+       <use xlink:href="#mb420e359af" x="186.242969" y="46.160177" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_34">
+      <text style="font: 9px 'DejaVu Sans'; text-anchor: end" x="179.242969" y="49.805177" transform="rotate(-0 179.242969 49.805177)">1003 東吳大學</text>
+     </g>
+    </g>
+    <g id="text_35">
+     <text style="font: 10px 'DejaVu Sans'; text-anchor: middle" x="14.798438" y="284.580697" transform="rotate(-90 14.798438 284.580697)">Institution code (names in linked table)</text>
+    </g>
+   </g>
+   <g id="line2d_34">
+    <path d="M 198.639684 523.001218 
+L 471.367408 523.001218 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_35">
+    <path d="M 200.54687 504.661178 
+L 486.624903 504.661178 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_36">
+    <path d="M 201.708177 486.321138 
+L 325.429845 486.321138 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_37">
+    <path d="M 205.384955 467.981098 
+L 406.375808 467.981098 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_38">
+    <path d="M 210.54053 449.641058 
+L 362.111029 449.641058 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_39">
+    <path d="M 211.036398 431.301018 
+L 401.119358 431.301018 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_40">
+    <path d="M 211.981153 412.960978 
+L 380.70925 412.960978 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_41">
+    <path d="M 226.61239 394.620938 
+L 357.036673 394.620938 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_42">
+    <path d="M 250.190844 376.280898 
+L 348.875836 376.280898 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_43">
+    <path d="M 255.204826 357.940858 
+L 413.817097 357.940858 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_44">
+    <path d="M 258.308849 339.600818 
+L 430.931772 339.600818 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_45">
+    <path d="M 263.378083 321.260778 
+L 340.513197 321.260778 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_46">
+    <path d="M 263.865792 302.920738 
+L 422.923275 302.920738 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_47">
+    <path d="M 266.461245 284.580697 
+L 538.900674 284.580697 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_48">
+    <path d="M 267.999815 266.240657 
+L 388.874769 266.240657 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_49">
+    <path d="M 270.325034 247.900617 
+L 584.015816 247.900617 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_50">
+    <path d="M 285.595217 229.560577 
+L 441.184588 229.560577 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_51">
+    <path d="M 297.677726 211.220537 
+L 438.237477 211.220537 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_52">
+    <path d="M 300.103499 192.880497 
+L 479.793459 192.880497 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_53">
+    <path d="M 310.247969 174.540457 
+L 434.252969 174.540457 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_54">
+    <path d="M 316.75374 156.200417 
+L 455.55091 156.200417 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_55">
+    <path d="M 336.191924 137.860377 
+L 408.28687 137.860377 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_56">
+    <path d="M 336.198779 119.520337 
+L 463.629039 119.520337 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_57">
+    <path d="M 338.970495 101.180297 
+L 430.60701 101.180297 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_58">
+    <path d="M 353.278346 82.840257 
+L 490.925869 82.840257 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_59">
+    <path d="M 355.181177 64.500217 
+L 560.122611 64.500217 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_60">
+    <path d="M 359.667747 46.160177 
+L 465.118283 46.160177 
+" clip-path="url(#p7a447cccbf)" style="fill: none; stroke: #aebbc7; stroke-opacity: 0.65; stroke-width: 5; stroke-linecap: square"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 186.242969 546.84327 
+L 186.242969 22.318125 
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 186.242969 546.84327 
+L 706.904989 546.84327 
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="PathCollection_1">
+    <defs>
+     <path id="m5c366ed5c8" d="M 0 2.95804 
+C 0.784481 2.95804 1.536938 2.646362 2.09165 2.09165 
+C 2.646362 1.536938 2.95804 0.784481 2.95804 0 
+C 2.95804 -0.784481 2.646362 -1.536938 2.09165 -2.09165 
+C 1.536938 -2.646362 0.784481 -2.95804 0 -2.95804 
+C -0.784481 -2.95804 -1.536938 -2.646362 -2.09165 -2.09165 
+C -2.646362 -1.536938 -2.95804 -0.784481 -2.95804 0 
+C -2.95804 0.784481 -2.646362 1.536938 -2.09165 2.09165 
+C -1.536938 2.646362 -0.784481 2.95804 0 2.95804 
+z
+" style="stroke: #2878a0"/>
+    </defs>
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="198.639684" y="523.001218" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_2">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="200.54687" y="504.661178" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_3">
+    <defs>
+     <path id="m6782dd3270" d="M 0 2.95804 
+C 0.784481 2.95804 1.536938 2.646362 2.09165 2.09165 
+C 2.646362 1.536938 2.95804 0.784481 2.95804 0 
+C 2.95804 -0.784481 2.646362 -1.536938 2.09165 -2.09165 
+C 1.536938 -2.646362 0.784481 -2.95804 0 -2.95804 
+C -0.784481 -2.95804 -1.536938 -2.646362 -2.09165 -2.09165 
+C -2.646362 -1.536938 -2.95804 -0.784481 -2.95804 0 
+C -2.95804 0.784481 -2.646362 1.536938 -2.09165 2.09165 
+C -1.536938 2.646362 -0.784481 2.95804 0 2.95804 
+z
+" style="stroke: #d76b45"/>
+    </defs>
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m6782dd3270" x="201.708177" y="486.321138" style="fill: #d76b45; stroke: #d76b45"/>
+    </g>
+   </g>
+   <g id="PathCollection_4">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="205.384955" y="467.981098" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_5">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="210.54053" y="449.641058" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_6">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m6782dd3270" x="211.036398" y="431.301018" style="fill: #d76b45; stroke: #d76b45"/>
+    </g>
+   </g>
+   <g id="PathCollection_7">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m6782dd3270" x="211.981153" y="412.960978" style="fill: #d76b45; stroke: #d76b45"/>
+    </g>
+   </g>
+   <g id="PathCollection_8">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="226.61239" y="394.620938" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_9">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="250.190844" y="376.280898" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_10">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="255.204826" y="357.940858" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_11">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="258.308849" y="339.600818" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_12">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="263.378083" y="321.260778" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_13">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="263.865792" y="302.920738" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_14">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="266.461245" y="284.580697" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_15">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="267.999815" y="266.240657" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_16">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="270.325034" y="247.900617" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_17">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="285.595217" y="229.560577" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_18">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="297.677726" y="211.220537" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_19">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m6782dd3270" x="300.103499" y="192.880497" style="fill: #d76b45; stroke: #d76b45"/>
+    </g>
+   </g>
+   <g id="PathCollection_20">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="310.247969" y="174.540457" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_21">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="316.75374" y="156.200417" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_22">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m6782dd3270" x="336.191924" y="137.860377" style="fill: #d76b45; stroke: #d76b45"/>
+    </g>
+   </g>
+   <g id="PathCollection_23">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="336.198779" y="119.520337" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_24">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="338.970495" y="101.180297" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_25">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m6782dd3270" x="353.278346" y="82.840257" style="fill: #d76b45; stroke: #d76b45"/>
+    </g>
+   </g>
+   <g id="PathCollection_26">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m5c366ed5c8" x="355.181177" y="64.500217" style="fill: #2878a0; stroke: #2878a0"/>
+    </g>
+   </g>
+   <g id="PathCollection_27">
+    <g clip-path="url(#p7a447cccbf)">
+     <use xlink:href="#m6782dd3270" x="359.667747" y="46.160177" style="fill: #d76b45; stroke: #d76b45"/>
+    </g>
+   </g>
+   <g id="text_36">
+    <text style="font: 12px 'DejaVu Sans'; text-anchor: middle" x="446.573979" y="16.318125" transform="rotate(-0 446.573979 16.318125)">International participation by institution</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p7a447cccbf">
+   <rect x="186.242969" y="22.318125" width="520.66202" height="524.525145"/>
+  </clipPath>
+ </defs>
+</svg>
