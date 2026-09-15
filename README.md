@@ -105,16 +105,13 @@ Roster institutions use their campus coordinates. Non-roster institutions, in Ta
 
 ## Repository and rebuilding
 
-The repository contains visualization and analysis code, selected rendered outputs and this documentation. Raw pages, API caches, CSV tables, spreadsheets and review decisions are excluded by `.gitignore`. **The HTML still contains the records needed to display the map; excluding separate data files does not make those embedded records private.**
+The repository contains the visualization pipeline, the rendered map and this documentation. Raw pages, API caches, CSV tables, spreadsheets and review decisions are excluded by `.gitignore`. **The HTML still contains the records needed to display the map; excluding separate data files does not make those embedded records private.**
 
 | Location | Contents |
 | --- | --- |
 | `index.html` | Entry point for the interactive map |
 | `html/map_explorer.html` | Standalone map snapshot |
 | `code/pipeline.py` | Cleaning, network construction, enrichment and rendering |
-| `analysis/code/` | Analysis and report-building code |
-| `analysis/requirements.txt` | Analysis dependencies |
-| `analysis/` | Selected rendered HTML reports and figures |
 
 Viewing the map requires only a browser. Rebuilding requires the excluded input tables, geographic boundaries, caches and review decisions. The current pipeline expects preparation folders such as `faculty_and_map`, `faculty_identity`, `collab_pubs` and `collab_network` beside this repository directory. If your preparation folders live elsewhere, their input paths must be adapted before running the pipeline.
 

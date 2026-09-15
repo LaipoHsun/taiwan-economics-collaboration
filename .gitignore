@@ -9,32 +9,6 @@
 !/html/
 /html/*
 !/html/map_explorer.html
-!/analysis/
-/analysis/*
-!/analysis/requirements.txt
-!/analysis/code/
-/analysis/code/*
-!/analysis/code/*.py
-!/analysis/code/*.cpp
-!/analysis/code/spatial_concentration_config.json
-!/analysis/report.html
-!/analysis/figures/
-/analysis/figures/*
-!/analysis/figures/*.svg
-!/analysis/figures/*.png
-!/analysis/temporal_external/
-!/analysis/geography_atlas/
-!/analysis/spatial_concentration/
-/analysis/temporal_external/*
-/analysis/geography_atlas/*
-/analysis/spatial_concentration/*
-!/analysis/temporal_external/index.html
-!/analysis/geography_atlas/index.html
-!/analysis/spatial_concentration/index.html
-# Rendered reports may depend on their generated figures.
-!/analysis/temporal_external/figures/
-!/analysis/geography_atlas/figures/
-!/analysis/spatial_concentration/figures/
 
 # Never publish standalone datasets, caches, credentials or local state.
 *.csv
