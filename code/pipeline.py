@@ -3130,17 +3130,40 @@ def stage8_map(layer='pub', show_external=False, show_unknown=False,
 # ═══════════════════════════════════════════════════════════════
 # 階段 9：互動式 HTML 地圖（單一檔案，離線可開）
 # ═══════════════════════════════════════════════════════════════
-# 保留個別作者與連線；地圖才彙總機構／地區，網路模式顯示個人。
-# 海外使用大圓方位與單調壓縮距離，台灣保持中央與本地比例。
-BUBBLE_MIN, BUBBLE_MAX = 0.07, 0.42      # 泡泡半徑（度）
+# 保留個別作者與連線；地圖才彙總機構，網路模式顯示個人。
+# 台灣與海外用同一個以台灣為中心的方位等距投影：台灣保持本地比例與中央位置，
+# 非名冊機構（含海外）畫在機構座標上；找不到機構或位置的作者暫放北極。
+WORLD_GEOJSON = 'ne_50m_admin_0_countries.geojson'     # Natural Earth 1:50m 國界
+INST_GEO_CACHE = os.path.join(FINAL, 'cache', 'institution_geo.json')
+INST_GEO_DECISIONS = os.path.join(DEC_DIR, 'external_institution_geo.csv')
+WIKIDATA_SPARQL = 'https://query.wikidata.org/sparql'
+GEO_MAX_KM = 80          # Wikidata 座標離 OpenAlex 城市座標超過這個距離就不採用
+POLE_OFFSET = 1.2        # 北極的兩個群組左右錯開（投影單位）
 
 
-def _svg_paths(polys, lat0, lon0):
-    """把經緯度多邊形轉成 SVG path，順便做等距圓柱投影的長寬校正。"""
-    k = math.cos(math.radians(lat0))
+def _aeqd(lat, lon):
+    """以台灣為中心的方位等距投影，回傳 (x, y, 與台灣的角距離°)。
+    單位是「度」，台灣附近跟原本的縣市座標同一個尺度（1 單位約 111 km），y 往下為正。
+    離中心的距離與方位都按比例，從台灣出發的直線就是大圓航線。"""
+    p0, la = math.radians(TW_CENTER[0]), math.radians(lat)
+    dl = math.radians(lon - TW_CENTER[1])
+    cc = math.sin(p0) * math.sin(la) + math.cos(p0) * math.cos(la) * math.cos(dl)
+    c = math.acos(max(-1.0, min(1.0, cc)))
+    k = 1.0 if c < 1e-9 else c / max(math.sin(c), 1e-9)
+    x = k * math.cos(la) * math.sin(dl)
+    y = k * (math.cos(p0) * math.sin(la) - math.sin(p0) * math.cos(la) * math.cos(dl))
+    return math.degrees(x), -math.degrees(y), math.degrees(c)
+
+
+def _km_from_tw(lat, lon):
+    return round(6371 * math.radians(_aeqd(lat, lon)[2]))
+
+
+def _svg_paths(polys):
+    """經緯度多邊形 (lon, lat) → 方位等距投影後的 SVG path。"""
     out = []
     for ring in polys:
-        pts = ['%.4f,%.4f' % ((x - lon0) * k, -(y - lat0)) for x, y in ring]
+        pts = ['%.4f,%.4f' % _aeqd(y, x)[:2] for x, y in ring]
         if len(pts) > 3:
             out.append('M' + 'L'.join(pts) + 'Z')
     return out
@@ -3181,7 +3204,7 @@ def _rdp(pts, eps):
     return [p for p, k in zip(pts, keep) if k]
 
 
-def load_counties(lat0, lon0, eps=0.0018, min_pts=6):
+def load_counties(eps=0.0018, min_pts=6):
     """縣市界，一縣一組 SVG path。地圖底圖固定用 `faculty_and_map/output/basemap/`
     那一份（與原本的 map_explorer 同源），簡化方式也照它的 RDP。"""
     path = os.path.join(ROOT, 'faculty_and_map', 'output', 'basemap', 'tw_county.geojson')
@@ -3204,36 +3227,331 @@ def load_counties(lat0, lon0, eps=0.0018, min_pts=6):
                 if len(r) >= min_pts:
                     rings.append(r)
         if rings:
-            out.append({'n': name, 'd': _svg_paths(rings, lat0, lon0)})
+            # 一個縣市併成一條 path、用 even-odd 填色：新北市的外框包住臺北市（臺北市是它的洞），
+            # 各環分開畫的話，洞會被填成一塊新北市蓋在臺北市上面，點臺北市會點到新北市。
+            out.append({'n': name, 'd': [''.join(_svg_paths(rings))]})
     return out
 
 
+def _gc_interp(a, b, t):
+    """大圓上 a→b（lon, lat）的內插點。"""
+    def vec(lon, lat):
+        lo, la = math.radians(lon), math.radians(lat)
+        return (math.cos(la) * math.cos(lo), math.cos(la) * math.sin(lo), math.sin(la))
+    p, q = vec(*a), vec(*b)
+    w = math.acos(max(-1.0, min(1.0, sum(i * j for i, j in zip(p, q)))))
+    if w < 1e-9:
+        return a
+    s = math.sin(w)
+    v = [(math.sin((1 - t) * w) * i + math.sin(t * w) * j) / s for i, j in zip(p, q)]
+    return math.degrees(math.atan2(v[1], v[0])), math.degrees(math.asin(max(-1.0, min(1.0, v[2]))))
+
+
+def _in_ring(pt, ring):
+    x, y = pt
+    inside = False
+    for (x1, y1), (x2, y2) in zip(ring, ring[1:] + ring[:1]):
+        if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
+            inside = not inside
+    return inside
+
+
+def load_world():
+    """世界國界，只當背景：台灣以外不分縣市、不能點。
+    投影後才簡化，離台灣越遠抽得越稀、太小的島直接略過，檔案才不會變大。
+    包住台灣對蹠點的國家（巴拉圭）投影後外環會沿著圓盤邊緣走，
+    所以補一圈圓盤外框，用 even-odd 填色畫成環狀。"""
+    path = os.path.join(ROOT, 'faculty_and_map', 'output', 'basemap', WORLD_GEOJSON)
+    if not os.path.exists(path):
+        path = os.path.join(FINAL, 'basemap copy', WORLD_GEOJSON)
+    if not os.path.exists(path):
+        print(f'  ⚠ 找不到 {WORLD_GEOJSON}；地圖只畫台灣')
+        return []
+    gj = json.load(open(path, encoding='utf-8'))
+    antipode = (TW_CENTER[1] - 180, -TW_CENTER[0])
+    normal, wrap = [], []
+    for feat in gj.get('features', []):
+        if (feat.get('properties') or {}).get('ADM0_A3') == 'TWN':
+            continue                                    # 台灣用縣市界
+        geom = feat.get('geometry') or {}
+        chunks = ([geom.get('coordinates')] if geom.get('type') == 'Polygon'
+                  else geom.get('coordinates') or [])
+        for poly in chunks:
+            for ring in poly:
+                ring = [(p[0], p[1]) for p in ring]
+                dense = ring[:1]
+                for a, b in zip(ring, ring[1:]):
+                    xa, ya, _ = _aeqd(a[1], a[0])
+                    xb, yb, _ = _aeqd(b[1], b[0])
+                    n = int(math.hypot(xb - xa, yb - ya) / 1.5)   # 長邊沿大圓補點，免得切過圓盤
+                    dense += [_gc_interp(a, b, i / (n + 1)) for i in range(1, n + 1)] + [b]
+                xy = [_aeqd(lat, lon)[:2] for lon, lat in dense]
+                d = math.hypot(*xy[0])
+                area = abs(sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2)
+                               in zip(xy, xy[1:] + xy[:1]))) / 2
+                if area < 0.004 * (1 + d / 8) ** 2:
+                    continue
+                xy = _rdp(xy, 0.02 + d * 0.002)
+                if len(xy) < 4:
+                    continue
+                fmt = '%.2f,%.2f' if d < 40 else '%.1f,%.1f'
+                s = 'M' + 'L'.join(fmt % p for p in xy) + 'Z'
+                (wrap if _in_ring(antipode, ring) else normal).append(s)
+    rim = 'M180,0A180,180 0 1,0 -180,0A180,180 0 1,0 180,0Z'
+    return [''.join(normal)] + [s + rim for s in wrap]
+
+
+def _county_of(points):
+    """(lat, lon) 清單 → 縣市名；不在任何縣市界內的回傳 ''。用原始縣市界判斷點在多邊形內，
+    要扣掉洞：新北市的外框包住臺北市，只看外框會把臺北市的點判成新北市。"""
+    path = os.path.join(ROOT, 'faculty_and_map', 'output', 'basemap', 'tw_county.geojson')
+    if not os.path.exists(path):
+        path = os.path.join(FINAL, 'basemap copy', 'tw_county.geojson')
+    if not points or not os.path.exists(path):
+        return [''] * len(points)
+    polys = []
+    for feat in json.load(open(path, encoding='utf-8')).get('features', []):
+        pr = feat.get('properties') or {}
+        name = _county_key(pr.get('COUNTYNAME') or pr.get('name') or '')
+        geom = feat.get('geometry') or {}
+        for poly in ([geom.get('coordinates')] if geom.get('type') == 'Polygon'
+                     else geom.get('coordinates') or []):
+            rings = [[(p[0], p[1]) for p in r] for r in poly]
+            xs, ys = [p[0] for p in rings[0]], [p[1] for p in rings[0]]
+            polys.append((name, min(xs), max(xs), min(ys), max(ys), rings))
+    return [next((n for n, x0, x1, y0, y1, rings in polys
+                  if x0 <= lon <= x1 and y0 <= lat <= y1 and _in_ring((lon, lat), rings[0])
+                  and not any(_in_ring((lon, lat), h) for h in rings[1:])), '')
+            for lat, lon in points]
+
+
+def _haversine_km(a, b):
+    la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
+    h = (math.sin((la2 - la1) / 2) ** 2
+         + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2)
+    return 12742 * math.asin(math.sqrt(h))
+
+
+def _wikidata_coords(qids):
+    """Wikidata P625（機構本身的座標），一次查 150 個；查過但沒有座標的記成 None。"""
+    got = {}
+    for i in range(0, len(qids), 150):
+        batch = qids[i:i + 150]
+        q = ('SELECT ?item ?coord WHERE { VALUES ?item { %s } ?item wdt:P625 ?coord }'
+             % ' '.join('wd:' + x for x in batch))
+        url = WIKIDATA_SPARQL + '?' + urllib.parse.urlencode({'query': q, 'format': 'json'})
+        req = urllib.request.Request(url, headers=dict(HTTP_UA, Accept='application/sparql-results+json'))
+        rows = None
+        for attempt in range(4):
+            try:
+                with urllib.request.urlopen(req, timeout=90) as r:
+                    rows = json.load(r)['results']['bindings']
+                break
+            except Exception:
+                time.sleep(2 ** attempt)
+        if rows is None:
+            print('  ⚠ Wikidata 查詢失敗，這批下次再查')
+            continue
+        got.update({x: None for x in batch})
+        for b in rows:
+            qid = b['item']['value'].rsplit('/', 1)[-1]
+            m = re.match(r'Point\(([-\d.eE]+) ([-\d.eE]+)\)', b['coord']['value'])
+            if m and got.get(qid) is None:
+                got[qid] = [float(m.group(2)), float(m.group(1))]
+        time.sleep(1)
+    return got
+
+
+def external_institution_places(ext, roster_code):
+    """非名冊外部作者 → 機構位置。回傳 {node_id: place}；找不到位置的不在字典裡。
+    place 是 {'key','label','cc','city','lat','lon','src'}，或 {'roster': 名冊機構代碼}。
+
+    機構名稱先換成 OpenAlex institution：
+      1. `manual_review/decisions/external_institution_geo.csv` 的人工裁定
+         （roster:名冊代碼／ror:ROR ID／wd:Wikidata QID／none）
+      2. 這位作者在 OpenAlex 快取中的歷年機構，名稱完全相同
+      3. 所有快取作者的機構名稱：同名同國取最常出現的機構；不看國別時必須唯一
+    座標優先 Wikidata P625（機構本身）；沒有、或離 OpenAlex 城市座標超過 GEO_MAX_KM
+    時退回 OpenAlex geo（ROR／GeoNames 的城市座標）。
+    OpenAlex 用 filter 批次查（50 個一頁、1 credit），結果快取在 cache/institution_geo.json。"""
+    sp = lambda s: ' '.join((s or '').split())
+    short = lambda u: (u or '').rstrip('/').rsplit('/', 1)[-1]
+    decisions = {}
+    if os.path.exists(INST_GEO_DECISIONS):
+        with open(INST_GEO_DECISIONS, newline='', encoding='utf-8-sig') as f:
+            decisions = {sp(r['affil_name']): r for r in csv.DictReader(f)}
+    cache = (json.load(open(INST_GEO_CACHE, encoding='utf-8'))
+             if os.path.exists(INST_GEO_CACHE) else {})
+    oa_recs = cache.setdefault('openalex', {})
+    ror_map = cache.setdefault('ror', {})
+    wd = cache.setdefault('wikidata', {})
+
+    authors = json.load(open(os.path.join(OA_CACHE, 'openalex_openalex_id.json'), encoding='utf-8'))
+    by_author = collections.defaultdict(dict)
+    by_name = collections.defaultdict(collections.Counter)   # (名稱, 國別或 *) → id 出現次數
+    for aid, a in authors.items():
+        if not isinstance(a, dict):
+            continue
+        for i in ([x.get('institution') or {} for x in a.get('affiliations') or []]
+                  + list(a.get('last_known_institutions') or [])):
+            if i.get('id') and i.get('display_name'):
+                k = _norm_inst(i['display_name'])
+                by_author[short(aid)].setdefault(k, []).append(short(i['id']))
+                by_name[(k, i.get('country_code') or '')][short(i['id'])] += 1
+                by_name[(k, '*')][short(i['id'])] += 1
+
+    want = {}                   # node_id → ('oa'|'ror'|'wd'|'roster', 值)
+    for r in ext:
+        name = sp(r.get('affil_institution_norm'))
+        if not name:
+            continue
+        if name in decisions:
+            kind, _, val = (decisions[name].get('decision') or '').partition(':')
+            if kind in ('roster', 'ror', 'wd') and val:
+                want[r['node_id']] = (kind, val)
+            continue                                   # none：人工確認找不到
+        # 候選 id 依序：作者自己的機構、同名同國（依出現次數）、不看國別但唯一的。
+        # 不看國別時一定要唯一，免得把蘇州的東吳對到臺北的東吳；
+        # OpenAlex 有已合併的重複機構 id，查不到記錄時就換下一個候選。
+        k = _norm_inst(name)
+        same, anyc = by_name.get((k, r.get('affil_country') or '')), by_name.get((k, '*'))
+        cands = list(by_author[short(r.get('openalex_author_id'))].get(k, []))
+        cands += ([i for i, _ in same.most_common()] if same
+                  else list(anyc) if anyc and len(anyc) == 1 else [])
+        if cands:
+            want[r['node_id']] = ('oa', list(dict.fromkeys(cands)))
+
+    sel = 'id,display_name,country_code,geo,ids,ror'
+    missing = set(cache.get('openalex_missing', []))        # 已合併／刪除的 id，不必每次重查
+    todo = [('openalex_id', sorted({c for k, v in want.values() if k == 'oa' for c in v}
+                                   - set(oa_recs) - missing), ''),
+            ('ror', sorted({v for k, v in want.values() if k == 'ror'} - set(ror_map)), 'https://ror.org/')]
+    for field, ids, prefix in todo:
+        for i in range(0, len(ids), 50):
+            batch = ids[i:i + 50]
+            res = _oa.get('institutions', {'filter': field + ':' + '|'.join(prefix + x for x in batch),
+                                           'select': sel, 'per_page': 100})
+            for rec in res.get('results', []):
+                oa_recs[short(rec['id'])] = rec
+                if rec.get('ror'):
+                    ror_map[short(rec['ror'])] = short(rec['id'])
+            if field == 'openalex_id' and 'error' not in res and not OFFLINE:
+                missing |= set(batch) - set(oa_recs)
+    cache['openalex_missing'] = sorted(missing)
+    qids = {short((rec.get('ids') or {}).get('wikidata')) for rec in oa_recs.values()}
+    qids |= {v for k, v in want.values() if k == 'wd'}
+    qids = sorted(q for q in qids if q.startswith('Q') and q not in wd)
+    if qids and not OFFLINE:
+        wd.update(_wikidata_coords(qids))
+    if not OFFLINE:
+        os.makedirs(os.path.dirname(INST_GEO_CACHE), exist_ok=True)
+        with open(INST_GEO_CACHE, 'w', encoding='utf-8') as f:
+            json.dump(cache, f, ensure_ascii=False)
+
+    places, unplaced = {}, collections.Counter()
+    for r in ext:
+        nid, name = r['node_id'], sp(r.get('affil_institution_norm'))
+        kind, val = want.get(nid, (None, None))
+        place = None
+        if kind == 'roster':
+            place = {'roster': val}
+        elif kind == 'wd' and wd.get(val):
+            dec = decisions[name]
+            place = {'key': val, 'label': dec.get('label') or name, 'cc': dec.get('country') or '',
+                     'city': '', 'lat': wd[val][0], 'lon': wd[val][1], 'src': 'wikidata'}
+        elif kind in ('oa', 'ror'):
+            rec = (oa_recs.get(ror_map.get(val)) if kind == 'ror'
+                   else next((oa_recs[c] for c in val if c in oa_recs), None))
+            if rec:
+                code = roster_code(rec.get('display_name')) if rec.get('country_code') == 'TW' else None
+                g = rec.get('geo') or {}
+                city = [g['latitude'], g['longitude']] if g.get('latitude') is not None else None
+                ll, src = wd.get(short((rec.get('ids') or {}).get('wikidata'))), 'wikidata'
+                if not ll or (city and _haversine_km(ll, city) > GEO_MAX_KM):
+                    ll, src = city, 'openalex'
+                if code:
+                    place = {'roster': code}
+                elif ll:
+                    place = {'key': short(rec['id']), 'label': rec.get('display_name') or name,
+                             'cc': rec.get('country_code') or g.get('country_code') or '',
+                             'city': g.get('city') or '', 'lat': ll[0], 'lon': ll[1], 'src': src}
+        if place:
+            places[nid] = place
+        elif name:
+            unplaced[name] += 1
+
+    src = collections.Counter('roster' if 'roster' in p else p['src'] for p in places.values())
+    named = sum(1 for r in ext if sp(r.get('affil_institution_norm')))
+    print(f'  非名冊機構定位：{len(places)}/{named} 位（Wikidata 機構座標 {src["wikidata"]}、'
+          f'OpenAlex 城市座標 {src["openalex"]}、併入名冊機構 {src["roster"]}）；'
+          f'找不到 {sum(unplaced.values())} 位 → 北極')
+    if unplaced:
+        print('    找不到的機構名稱：' + '；'.join(f'{k}×{v}' for k, v in unplaced.most_common(12)))
+    return places
+
+
 def build_html_payload():
-    """算出 HTML 要用的全部東西：縣市、機構、節點、泡泡、邊、論文、計畫。"""
+    """算出 HTML 要用的全部東西：世界底圖、縣市、機構、節點、外部機構群組、邊、論文、計畫。"""
     pos, meta, _ = build_map_positions(show_external=True, show_unknown=True)
     _, roster, ext = read_master()
     info = {r['node_id']: r for r in roster + ext}
     geo = {r['teacher_id']: r for r in rd('final_plan', 'map', 'professor_geo.csv')}
+    inst_rows = rd('final_plan', 'map', 'institutions.csv')
+    code_by_key, inst_ll = {}, {}
+    for r in inst_rows:
+        for nm in (r['institution_name'], r['institution_en']):
+            if nm:
+                code_by_key[_norm_inst(nm)] = r['institution_code']
+        if r['lat'] and r['lon']:
+            inst_ll[r['institution_code']] = (float(r['lat']), float(r['lon']))
 
-    # ── 地區泡泡
-    reg = collections.defaultdict(list)
+    def roster_code(name):
+        k = _norm_inst(name)
+        return code_by_key.get(_norm_inst(INST_ALIAS[k])) if k in INST_ALIAS else code_by_key.get(k)
+
+    # ── 外部作者：非名冊機構畫在機構座標；找不到機構或位置的暫放北極
+    places = external_institution_places(
+        [info[n] for n, m in meta.items() if m['kind'] == 'ext_region'], roster_code)
+    groups, place_of, to_roster = collections.defaultdict(list), {}, {}
     for nid, m in meta.items():
-        if m['kind'] in ('ext_region', 'ext_unknown'):
-            reg[m['region']].append(nid)
+        if m['kind'] == 'ext_unknown':
+            groups['?機構不明'].append(nid)
+        elif m['kind'] == 'ext_region':
+            p = places.get(nid) or {}
+            if p.get('roster') in inst_ll:
+                to_roster[nid] = p['roster']
+            elif 'key' in p:
+                groups[p['key']].append(nid)
+                place_of[p['key']] = p
+            else:
+                groups['?找不到機構位置'].append(nid)
+    pole_x, pole_y, _ = _aeqd(90, 0)
     bubbles, in_bubble = [], {}
-    mx = max((len(v) for v in reg.values()), default=1)
-    for name, ids in sorted(reg.items(), key=lambda kv: -len(kv[1])):
-        cx = sum(pos[i][0] for i in ids) / len(ids)
-        cy = sum(pos[i][1] for i in ids) / len(ids)
-        r = BUBBLE_MIN + (BUBBLE_MAX - BUBBLE_MIN) * math.sqrt(len(ids) / mx)
-        bid = 'B:' + name
+    for key, ids in sorted(groups.items(), key=lambda kv: -len(kv[1])):
         insts = collections.Counter(
             (info[i].get('affil_institution_norm') or '（不明）') for i in ids)
-        bubbles.append({'id': bid, 'label': name, 'n': len(ids), 'x': cx, 'y': cy, 'r': r,
-                        'unknown': int(meta[ids[0]]['kind'] == 'ext_unknown'),
-                        'top': [[k, v] for k, v in insts.most_common(8)]})
+        b = {'id': 'B:' + key, 'n': len(ids), 'top': [[k, v] for k, v in insts.most_common(8)]}
+        if key.startswith('?'):
+            unknown = key == '?機構不明'
+            b.update(label=key[1:], pole=1, unknown=int(unknown), cc='', city='', src='', km=None,
+                     x=round(pole_x + (-POLE_OFFSET if unknown else POLE_OFFSET), 4),
+                     y=round(pole_y, 4))
+        else:
+            p = place_of[key]
+            x, y, _ = _aeqd(p['lat'], p['lon'])
+            b.update(label=p['label'], pole=0, unknown=0, cc=p['cc'], city=p['city'],
+                     src=p['src'], km=_km_from_tw(p['lat'], p['lon']),
+                     x=round(x, 4), y=round(y, 4))
         for i in ids:
-            in_bubble[i] = bid
+            in_bubble[i] = len(bubbles)
+        bubbles.append(b)
+    # 台灣的非名冊機構要知道在哪個縣市，HTML 才能在全台視野收合台北、新北的密集機構
+    tw = [b for b in bubbles if b['cc'] == 'TW' and not b['pole']]
+    for b, c in zip(tw, _county_of([(place_of[b['id'][2:]]['lat'], place_of[b['id'][2:]]['lon'])
+                                    for b in tw])):
+        b['cty'] = c
+    for b in bubbles:
+        b.setdefault('cty', '')
 
     # ── 論文與計畫（給個人檔案與「這條邊合作了哪幾篇」用）
     papers = rd('final_plan', 'paper', 'papers_all.csv')
@@ -3261,13 +3579,20 @@ def build_html_payload():
     for nid, m in meta.items():
         r = info.get(nid, {})
         g = geo.get(nid, {})
+        if nid in in_bubble:                  # 非名冊機構／北極：跟群組同一點
+            x, y = bubbles[in_bubble[nid]]['x'], bubbles[in_bubble[nid]]['y']
+        else:                                 # 名冊教師，以及名冊機構裡的外部作者
+            lon, lat = pos[nid] if nid not in to_roster else inst_ll[to_roster[nid]][::-1]
+            x, y, _ = _aeqd(lat, lon)
+            x, y = round(x, 4), round(y, 4)
         nodes.append({
             'id': nid, 'k': 0 if m['kind'] == 'roster' else 1,
-            'x': pos[nid][0], 'y': pos[nid][1],
+            'x': x, 'y': y,
             'name': m.get('name') or nid, 'inst': m.get('inst', ''),
-            'ic': g.get('institution_code', ''),
-            'bi': next((j for j, b in enumerate(bubbles) if b['id'] == in_bubble.get(nid)), None),
-            'country': r.get('affil_country', '') or ('TW' if m['kind'] == 'roster' else ''),
+            'ic': g.get('institution_code', '') or to_roster.get(nid, ''),
+            'bi': in_bubble.get(nid),
+            'country': (r.get('affil_country', '') or places.get(nid, {}).get('cc', '')
+                        or ('TW' if m['kind'] == 'roster' else '')),
             'cty': _county_key(g.get('county', '')),
             'dept': m.get('dept', ''),
             'cite': r.get('n_citations_total', ''), 'oapub': r.get('n_pubs_total', ''),
@@ -3293,6 +3618,7 @@ def build_html_payload():
     for n in nodes:
         if n['k'] == 1 and not n['ic']:
             n['ic'] = code_by_name.get(n['inst'], '')
+        if n['k'] == 1 and not n['cty']:
             n['cty'] = cty_by_code.get(n['ic'], '')
 
     def slot(nid):
@@ -3309,51 +3635,23 @@ def build_html_payload():
                           1 if (e['source_teacher_id'] and e['target_teacher_id']) else 0,
                           e.get('paper_id') or (e.get('project_family_key', '') + ':' + e['year'] if lay else e.get('edge_id'))])
 
-    lat0, lon0 = TW_CENTER
-    k = math.cos(math.radians(lat0))
-    for n in nodes + bubbles:
-        n['x'], n['y'] = round((n['x'] - lon0) * k, 4), round(-(n['y'] - lat0), 4)
-        if 'r' in n:
-            n['r'] = round(n['r'] * k, 4)
-    # Azimuthal equidistant bearing with a monotone compressed distance.
-    # Taiwan keeps its local map scale; foreign anchors are explicitly schematic.
-    for b in bubbles:
-        country = b['label']
-        ll = COUNTRY_LATLON.get(country)
-        b['members'] = [idx[i] for i in reg[country] if i in idx]
-        b['km'] = None
-        if ll and country != 'TW':
-            la1, lo1 = map(math.radians, TW_CENTER)
-            la2, lo2 = map(math.radians, ll)
-            dl = (lo2 - lo1 + math.pi) % (2 * math.pi) - math.pi
-            angle = math.atan2(math.sin(dl) * math.cos(la2),
-                               math.cos(la1) * math.sin(la2) -
-                               math.sin(la1) * math.cos(la2) * math.cos(dl))
-            arc = math.acos(max(-1, min(1, math.sin(la1)*math.sin(la2) +
-                         math.cos(la1)*math.cos(la2)*math.cos(dl))))
-            b['km'] = round(6371 * arc)
-            radius = 2.25 + 2.0 * math.log1p(b['km']/1000) / math.log1p(20000/1000)
-            b['x'], b['y'] = radius * math.sin(angle), -radius * math.cos(angle)
-        elif country.startswith('TW'):
-            b['x'], b['y'] = -1.9, .45
-        else:
-            b['unknown'] = 1
-            b['x'], b['y'] = (2.6 if country == '機構不明' else -2.6), 3.1
+    for nid, bi in in_bubble.items():
+        bubbles[bi].setdefault('members', []).append(idx[nid])
     insts = []
-    for r in rd('final_plan', 'map', 'institutions.csv'):
+    for r in inst_rows:
         if not r['lat']:
             continue
+        x, y, _ = _aeqd(float(r['lat']), float(r['lon']))
         insts.append({'c': r['institution_code'],
-                      'n': r['institution_name'].replace('學校財團法人', ''),
+                      'n': re.sub(r'^.*學校財團法人', '', r['institution_name']),
                       'cty': _county_key(r['county']),
-                      'x': round((float(r['lon']) - lon0) * k, 4),
-                      'y': round(-(float(r['lat']) - lat0), 4),
+                      'x': round(x, 4), 'y': round(y, 4),
                       'na': int(r['n_active']), 'nr': int(r['n_roster']),
                       'np': int(r['n_papers']), 'nj': int(r['n_projects'])})
 
     return {
         'nodes': nodes, 'bubbles': bubbles, 'edges': edges, 'insts': insts,
-        'counties': load_counties(lat0, lon0),
+        'world': load_world(), 'counties': load_counties(),
         'papers': plist, 'projects': jlist,
         'depts': [d for d, _ in collections.Counter(
             n['dept'] for n in nodes if n['k'] == 0 and n['dept']).most_common()],
@@ -3367,7 +3665,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 <title>台灣經濟學者合作網路 · 地圖</title>
 <style>
 :root{color-scheme:light only;--bg:#f6f7f8;--fg:#16181b;--mut:#6e7278;--line:#e3e5e8;
- --sea:#eaeef2;--land:#fff;--hl:#fdf6e6;--panel:#fff;--acc:#2f6f9f;--acc2:#d1583a}
+ --sea:#e1e8ef;--land:#fff;--hl:#fdf6e6;--panel:#fff;--acc:#2f6f9f;--acc2:#d1583a}
 *{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;height:100vh;display:flex;flex-direction:column;color:var(--fg);background:var(--bg);
  font:13.5px/1.65 -apple-system,"PingFang TC","Noto Sans TC",system-ui,sans-serif}
@@ -3387,14 +3685,16 @@ button[aria-pressed=true]{background:var(--acc);color:#fff;border-color:var(--ac
 .grow{margin-left:auto}
 #wrap{display:grid;grid-template-columns:minmax(0,1fr) 350px;flex:1;min-height:0}
 @media(max-width:940px){body{height:auto}#wrap{grid-template-columns:1fr}#mapbox{height:64vh}}
-#mapbox{position:relative;background:var(--sea);overflow:hidden}
+#mapbox{position:relative;background:#f7f8f9;overflow:hidden}
 svg{width:100%;height:100%;display:block;touch-action:none}
 #svg{cursor:grab}#svg.drag{cursor:grabbing}
-path.cty{fill:var(--land);stroke:#ccd0d5;stroke-width:.7px;vector-effect:non-scaling-stroke;
+path.cty{fill:var(--land);fill-rule:evenodd;stroke:#ccd0d5;stroke-width:.7px;vector-effect:non-scaling-stroke;
  cursor:pointer;transition:fill .15s}
 path.cty:hover{fill:var(--hl)}
 path.cty.on{fill:#fdf3dd;stroke:#8a7a55;stroke-width:1.4px}
 path.cty.dim{fill:#f2f3f4;opacity:.75}
+circle.globe{fill:var(--sea);stroke:#d5dbe1;stroke-width:1px;vector-effect:non-scaling-stroke;pointer-events:none}
+path.world{fill:#f3f4f5;stroke:#c9ced4;stroke-width:.5px;vector-effect:non-scaling-stroke;fill-rule:evenodd;pointer-events:none}
 .edge{fill:none;stroke-linecap:round;cursor:pointer}
 .edge:hover,.edge.on{stroke-opacity:.95!important;stroke:#b3651f!important}
 .nd{stroke:#2b2b2b;stroke-width:.6px;vector-effect:non-scaling-stroke;cursor:pointer}
@@ -3404,12 +3704,13 @@ path.cty.dim{fill:#f2f3f4;opacity:.75}
 .inst.sel{stroke:#b3651f;stroke-width:2.4px}
 .inst.dimc{fill-opacity:.16;stroke-opacity:.35}
 .inst:hover{stroke:#111;stroke-width:1.8px}
-.bub{fill:#8a9099;fill-opacity:.3;stroke:#6c727a;stroke-width:1px;vector-effect:non-scaling-stroke;cursor:pointer}
-.bub.unk{fill:#c5c9ce;stroke:#b0b4b9;stroke-dasharray:3 3}
+.bub{fill:#6c727a;fill-opacity:.5;stroke:#4f555c;stroke-width:.8px;vector-effect:non-scaling-stroke;cursor:pointer}
+.bub.pole{fill:#c5c9ce;fill-opacity:.45;stroke:#8f959b;stroke-dasharray:3 3}
+.bub.unk{fill:#d5d8dc;stroke:#b0b4b9}
 .bub:hover,.nd:hover{stroke:#111;stroke-width:1.8px}
 text{pointer-events:none;font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif}
 text.instlb{font-weight:600;fill:#12314f;paint-order:stroke;stroke:#fff;stroke-linejoin:round}
-text.bl{font-weight:650;fill:#3a3f46;paint-order:stroke;stroke:#fff;stroke-linejoin:round}
+text.bl{font-weight:500;fill:#4a4f56;paint-order:stroke;stroke:#fff;stroke-linejoin:round}
 text.bn{fill:#70737a;paint-order:stroke;stroke:#fff}
 #side{border-left:1px solid var(--line);background:var(--panel);padding:14px 16px;overflow:auto}
 #side h2{font-size:13.5px;margin:0 0 4px;font-weight:660}
@@ -3437,6 +3738,10 @@ text.bn{fill:#70737a;paint-order:stroke;stroke:#fff}
 #nsvg{cursor:grab}.rail{pointer-events:auto;cursor:pointer}.hoverlabel{display:none}.netperson:hover .hoverlabel{display:block}
 #focusinfo button{margin:6px 0}#netnote{pointer-events:none;background:#ffffffde;max-width:90%;padding:5px 8px;border-radius:5px}
 .netnote{position:absolute;top:8px;left:12px;font-size:11.5px;color:var(--mut);z-index:2}
+#zoomctl{position:absolute;right:14px;bottom:14px;display:flex;flex-direction:column;gap:6px;z-index:3}
+#zoomctl button{width:36px;height:36px;padding:0;display:grid;place-items:center;border-radius:8px;
+ background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.18);color:#33373c}
+#zoomctl svg{width:20px;height:20px}
 </style></head><body>
 <header>
   <h1>台灣經濟學者合作網路</h1>
@@ -3465,19 +3770,24 @@ text.bn{fill:#70737a;paint-order:stroke;stroke:#fff}
   <button id="global">全台總覽</button><span class="grow"></span>
   <button id="back" hidden>← 回全台</button>
   <button id="reset">重設視野</button>
+  <button id="world">看全世界</button>
   <span class="k" id="stat"></span>
 </header>
 <div id="wrap">
   <div id="mapbox">
     <svg id="svg"><g id="root"><g id="gmap"></g><g id="gedge"></g><g id="gnode"></g><g id="glab"></g></g></svg>
     <div id="netbox" hidden><div class="netnote" id="netnote"></div><svg id="nsvg"></svg></div>
+    <div id="zoomctl">
+      <button id="zin" title="放大" aria-label="放大"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M7.5 10.5h6M10.5 7.5v6"/></svg></button>
+      <button id="zout" title="縮小" aria-label="縮小"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M7.5 10.5h6"/></svg></button>
+    </div>
   </div>
   <aside id="side"><div id="focusinfo"></div><div id="details"></div></aside>
 </div>
 <script>
 const D=__DATA__, NODES=D.nodes, BUB=D.bubbles, N=NODES.length;
 const regionNames=new Intl.DisplayNames(['zh-Hant'],{type:'region'});
-BUB.forEach(b=>{if(/^[A-Z]{2}$/.test(b.label))b.label=regionNames.of(b.label)+' '+b.label});
+BUB.forEach(b=>{try{b.country=b.cc?regionNames.of(b.cc)+' '+b.cc:''}catch(e){b.country=b.cc}});
 const PAL=["#3b6ea5","#a8c5e2","#e08a1e","#f3c583","#2d8a4e","#9dd6a8","#b8323c","#f0a3a8",
  "#7a5aa8","#c3b3dd","#4f8f8f","#a9cfcf","#8a6d3b","#d9c39a","#777","#bbb"];
 const dcol={}; D.depts.forEach((d,i)=>dcol[d]=PAL[i%PAL.length]);
@@ -3510,11 +3820,33 @@ function applyHash(){const h=new URLSearchParams(location.hash.slice(1));
 
 // ── 視野
 function computeHome(){
-  // Symmetric about Taiwan, including offshore islands and the foreign anchors.
-  let rx=2.0,ry=2.25;
-  for(const g of GRP.values()){rx=Math.max(rx,Math.abs(g.x)+.7);ry=Math.max(ry,Math.abs(g.y)+.6)}
-  HOME={x:-rx,y:-ry,w:rx*2,h:ry*2};
+  // 台灣是重點：預設只框本島與金門、馬祖；海外機構要縮小或按「看全世界」才看得到。
+  HOME={x:-2.7,y:-2.7,w:5.4,h:5.4};
 }
+const WORLD={x:-184,y:-184,w:368,h:368};
+function worldView(){if($("#view").value==="net"){$("#view").value="map";build()}fitTo(WORLD,true)}
+// 北部機構太密，容易誤點。全台視野時：
+//   · 臺北市、新北市只留 CROWDED 列的代表機構（兩市的其他機構、非名冊機構一起收起來）
+//   · LATE 列的名冊機構（宜蘭大學、佛光大學、臺灣海洋大學、銘傳大學）先不畫
+// 放大到畫面短邊小於 FOLD_SPAN（約 165 km）或點進該縣市時，才把它們與連線畫出來。
+const CROWDED={"臺北市":new Set(["0003","AS01","0001"]),"新北市":new Set(["0017"])};
+const LATE=new Set(["0031","1050","0012","1016"]), FOLD_SPAN=1.5;
+const zoomedIn=()=>Math.min(VB.w,VB.h)<=FOLD_SPAN;
+function folded(g){if(zoomedIn()||SEL.county===g.cty)return false;
+  const code=g.type==="I"?g.k.slice(1):null, keep=CROWDED[g.cty];
+  return LATE.has(code)||(!!keep&&!keep.has(code))}
+// 全台視野的 bubble 畫小一點；點進縣市或放大後恢復原本大小（仍保留最小可點擊尺寸）。
+function rad(g){return Math.max(2.5,g.rp*(SEL.county||zoomedIn()?1:.6))}
+function zoomBy(f){
+  if($("#view").value==="net"){if(!netVB)return;const cx=netVB.x+netVB.w/2,cy=netVB.y+netVB.h/2;
+    setNetVB({x:cx-netVB.w*f/2,y:cy-netVB.h*f/2,w:netVB.w*f,h:netVB.h*f});return}
+  const b=animTo||VB,cx=b.x+b.w/2,cy=b.y+b.h/2;animateTo({x:cx-b.w*f/2,y:cy-b.h*f/2,w:b.w*f,h:b.h*f})}
+let foldKey=null;
+function applyFold(force){const key=(Math.min(VB.w,VB.h)>FOLD_SPAN)+"|"+SEL.county;
+  if(!force&&key===foldKey)return; foldKey=key;
+  const hide=new Set([...GRP.values()].filter(folded).map(g=>g.k));
+  $("#gnode").querySelectorAll("circle").forEach(c=>c.style.display=hide.has(c.dataset.k)?"none":"");
+  $("#gedge").querySelectorAll("line").forEach(l=>{const e=GEDG[+l.dataset.e];l.style.display=hide.has(e.a)||hide.has(e.b)?"none":""})}
 function fitTo(box,anim){const r=svg.getBoundingClientRect();
   if(!r.width||!r.height)return;
   const ar=r.width/r.height;
@@ -3522,24 +3854,27 @@ function fitTo(box,anim){const r=svg.getBoundingClientRect();
   const v={x:box.x+(box.w-w)/2,y:box.y+(box.h-h)/2,w,h};
   anim?animateTo(v):setVB(v)}
 function home(anim){if($("#view").value==="net"){renderNet();return}computeHome();fitTo(HOME,anim)}
-let animId=null;
-function animateTo(t){cancelAnimationFrame(animId);const s={...VB},t0=performance.now();
+let animId=null, animTo=null;   // animTo：動畫的目標視野；連按放大鏡時以它為基準
+function animateTo(t){cancelAnimationFrame(animId);const s={...VB},t0=performance.now();animTo=t;
   (function step(now){const k=Math.min(1,(now-t0)/380),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
     setVB({x:s.x+(t.x-s.x)*e,y:s.y+(t.y-s.y)*e,w:s.w+(t.w-s.w)*e,h:s.h+(t.h-s.h)*e});
-    if(k<1)animId=requestAnimationFrame(step)})(t0)}
+    if(k<1)animId=requestAnimationFrame(step);else animTo=null})(t0)}
 function setVB(v){ if(![v.x,v.y,v.w,v.h].every(Number.isFinite)||v.w<=0||v.h<=0)return;
-  VB=v;svg.setAttribute("viewBox",`${v.x} ${v.y} ${v.w} ${v.h}`);rescale();relabel()}
+  VB=v;svg.setAttribute("viewBox",`${v.x} ${v.y} ${v.w} ${v.h}`);rescale();applyFold();relabel()}
 function rescale(){const r=svg.getBoundingClientRect(); if(!r.width)return;
   const u=VB.w/r.width;
   $("#gnode").querySelectorAll("circle").forEach(c=>{
     const g=GRP.get(c.dataset.k);
-    const px=g?g.rp:(c.classList.contains("ext")?3.0:3.8);
+    const px=g?rad(g):(c.classList.contains("ext")?3.0:3.8);
     c.setAttribute("r",px*u)});
   $("#gedge").querySelectorAll("line").forEach(l=>l.setAttribute("stroke-width",l.dataset.w*u));}
 const P=i=>i<N?NODES[i]:BUB[i-N];
 
 // ── 地圖底圖
-$("#gmap").innerHTML=D.counties.map(c=>c.d.map(p=>
+// 世界只當背景（不能點、不分縣市）；台灣縣市畫在最上面。
+$("#gmap").innerHTML=`<circle class="globe" cx="0" cy="0" r="180"></circle>`+
+  D.world.map(d=>`<path class="world" d="${d}"></path>`).join("")+
+  D.counties.map(c=>c.d.map(p=>
   `<path class="cty" data-c="${esc(c.n)}" d="${p}"></path>`).join("")).join("");
 $("#gmap").addEventListener("click",e=>{const p=e.target.closest("path.cty");
   if(p)selectCounty(p.dataset.c)});
@@ -3558,29 +3893,29 @@ svg.addEventListener("pointermove",e=>{if(!drag)return;
                     y:drag.vb.y-(e.clientY-drag.y)/r.height*VB.h})});
 addEventListener("pointerup",()=>{drag=null;svg.classList.remove("drag")});
 $("#reset").onclick=()=>home(true);
+$("#world").onclick=worldView;
+$("#zin").onclick=()=>zoomBy(.5);
+$("#zout").onclick=()=>zoomBy(2);
 $("#back").onclick=()=>{ if(SEL.node!=null){SEL.node=null; SEL.inst?selectInst(SEL.inst):(SEL.county?selectCounty(SEL.county):overview())}
   else if(SEL.inst){SEL.inst=null; SEL.county?selectCounty(SEL.county):overview()}
   else {SEL.county=null; overview()} };
 
-// ── 標籤（重疊就不畫）
+// ── 標籤（只標畫面內、不重疊的；名冊機構優先，非名冊機構最多 40 個）
 function relabel(){
  const r=svg.getBoundingClientRect(),sc=r.width/VB.w;if(!r.width)return;
- const used=[],out=[];
- // Foreign labels occupy separate rails; their leaders end at the geographic anchor.
- for(const side of [-1,1]){
-   const bs=[...GRP.values()].filter(g=>g.type==='B'&&(g.x<0?-1:1)===side).sort((a,b)=>a.y-b.y);
-   const step=Math.min(34,(r.height-70)/Math.max(1,bs.length)),start=Math.max(35,(r.height-step*bs.length)/2);
-   bs.forEach((g,i)=>{const xx=side<0?14:r.width-14,yy=start+i*step,x=VB.x+xx/sc,y=VB.y+yy/sc;
-     out.push(`<line x1="${g.x}" y1="${g.y}" x2="${x}" y2="${y}" stroke="#8c9ba8" stroke-opacity=".55" stroke-width="${.65/sc}"/>`);
-     out.push(`<text data-mapkey="${g.k}" class="bl rail" x="${x}" y="${y}" text-anchor="${side<0?'start':'end'}" style="font-size:${11/sc}px;stroke-width:${3/sc}px">${esc(g.label)} · ${g.n} 人${step<22&&g.km!=null?" · "+g.km+" km":""}</text><text class="bn" x="${x}" y="${y+12/sc}" text-anchor="${side<0?'start':'end'}" style="font-size:${(step<22?0:9)/sc}px;stroke-width:${3/sc}px">${g.km!=null?'約 '+g.km.toLocaleString()+' km':'位置示意，非海外座標'}</text>`);
-   });
- }
- for(const g of [...GRP.values()].filter(g=>g.type!=='B').sort((a,b)=>b.n-a.n)){
-   const label=(g.label||'').replace('國立',''),w=Math.max(50,label.length*11),px=(g.x-VB.x)*sc,py=(g.y-VB.y)*sc;
-   let yy=py-g.rp-8,ok=false;
-   for(const offset of [0,-18,18,-36,36,-54,54]){yy=py-g.rp-8+offset;if(!used.some(b=>Math.abs(px-b.x)<(w+b.w)/2&&Math.abs(yy-b.y)<15)){ok=true;break}}
-   if(!ok)continue;used.push({x:px,y:yy,w});const y=VB.y+yy/sc;
-   out.push(`<text data-mapkey="${g.k}" class="instlb rail" x="${g.x}" y="${y}" text-anchor="middle" style="font-size:${11/sc}px;stroke-width:${3/sc}px">${esc(label)}</text>`);
+ const used=[],out=[];let foreign=0;
+ const textW=(s,fs)=>[...s].reduce((w,c)=>w+(c.charCodeAt(0)>0x2e80?fs:fs*.56),0);
+ const gs=[...GRP.values()].sort((a,b)=>(a.type==='B')-(b.type==='B')||b.n-a.n);
+ for(const g of gs){
+   const px=(g.x-VB.x)*sc,py=(g.y-VB.y)*sc,isB=g.type==='B';
+   if(px<-20||py<-20||px>r.width+20||py>r.height+20||folded(g))continue;
+   if(isB&&(foreign>=40||(!g.pole&&g.n<6&&sc<400)))continue;
+   const label=isB?`${g.pole?'北極：':''}${g.label} · ${g.n}`:(g.label||'').replace('國立','');
+   const fs=isB?10:11,w=Math.max(40,textW(label,fs));
+   const gr=rad(g);let yy=py-gr-7,ok=false;
+   for(const offset of [0,-17,17,-34,34,-51,51]){yy=py-gr-7+offset;if(!used.some(b=>Math.abs(px-b.x)<(w+b.w)/2&&Math.abs(yy-b.y)<14)){ok=true;break}}
+   if(!ok)continue;used.push({x:px,y:yy,w});if(isB)foreign++;
+   out.push(`<text data-mapkey="${g.k}" class="${isB?'bl':'instlb'} rail" x="${g.x}" y="${VB.y+yy/sc}" text-anchor="middle" style="font-size:${fs/sc}px;stroke-width:${3/sc}px">${esc(label)}</text>`);
  }
  $("#glab").innerHTML=out.join('');
 }
@@ -3633,9 +3968,9 @@ function buildGroups(){
   GRP=new Map();
   const add=(k,i)=>{ let g=GRP.get(k);
     if(!g){ const o=P(i); g={k,members:[],type:k[0],x:0,y:0,n:0};
-      if(k[0]==="B"){const b=BUB[+k.slice(1)];g.x=b.x;g.y=b.y;g.label=b.label;g.unknown=b.unknown;g.km=b.km}
-      else if(k[0]==="I"){const t=D.insts.find(t=>t.c===k.slice(1))||o;g.x=t.x;g.y=t.y;g.label=t.n;g.inst=t}
-      else {const t=D.insts.find(t=>t.c===o.ic)||(o.bi!=null?BUB[o.bi]:o);g.x=t.x;g.y=t.y;g.label=o.name;g.node=i}
+      if(k[0]==="B"){const b=BUB[+k.slice(1)];g.x=b.x;g.y=b.y;g.label=b.label;g.unknown=b.unknown;g.km=b.km;g.pole=b.pole;g.country=b.country;g.cty=b.cty}
+      else if(k[0]==="I"){const t=D.insts.find(t=>t.c===k.slice(1))||o;g.x=t.x;g.y=t.y;g.label=t.n;g.inst=t;g.cty=t.cty}
+      else {const t=D.insts.find(t=>t.c===o.ic)||(o.bi!=null?BUB[o.bi]:o);g.x=t.x;g.y=t.y;g.label=o.name;g.node=i;g.cty=o.cty}
       GRP.set(k,g)}
     g.members.push(i); g.n++;}
   VIS.forEach(i=>add(keyOf(i),i));
@@ -3643,9 +3978,9 @@ function buildGroups(){
   // 半徑用「螢幕像素」定義，rescale() 再換算成世界座標——
   // 這樣放大時圓不會跟著脹成一大片色塊（舊版的 .pt 也是這樣做的）。
   const mx=Math.max(1,...[...GRP.values()].filter(g=>g.type==="I").map(g=>g.n));
-  const mb=Math.max(1,...[...GRP.values()].filter(g=>g.type==="B").map(g=>g.n));
+  const mb=Math.max(1,...[...GRP.values()].filter(g=>g.type==="B"&&!g.pole).map(g=>g.n));
   GRP.forEach(g=>{ if(g.type==="I")g.rp=Math.max(3,20*Math.sqrt(g.n/mx));
-                   else if(g.type==="B")g.rp=Math.max(3,28*Math.sqrt(g.n/mb));
+                   else if(g.type==="B")g.rp=g.pole?Math.min(24,6+Math.sqrt(g.n)*.45):Math.max(2.6,13*Math.sqrt(g.n/mb));
                    else g.rp=3.8});
   const agg=new Map();
   EDG.forEach(([a,b,w,c,l])=>{const ka=keyOf(a),kb=keyOf(b); if(ka===kb)return;
@@ -3661,19 +3996,21 @@ function renderMap(){
     p.classList.toggle("dim",!!SEL.county&&p.dataset.c!==SEL.county)});
   $("#gedge").innerHTML=GEDG.map((e,i)=>{const p=GRP.get(e.a),q=GRP.get(e.b);
     if(!p||!q)return "";
-    const col=e.l?"#d1583a":"#3b6ea5",op=e.l?.5:.24,lw=Math.min(3.5,.4+.5*Math.sqrt(e.c));
-    return `<line class="edge" data-e="${i}" data-w="${lw}" x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" stroke="${col}" stroke-opacity="${op}"/>`}).join("");
+    // 連到海外（或北極）的線淡一點，台灣內部的合作才是主角
+    const far=[p,q].some(g=>g.type==="B"&&(g.pole||g.km>600));
+    const col=e.l?"#d1583a":"#3b6ea5",op=far?(e.l?.3:.1):(e.l?.5:.24),lw=Math.min(3.5,.4+.5*Math.sqrt(e.c));
+    return `<line class="edge" data-e="${i}" data-w="${lw}" data-op="${op}" x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" stroke="${col}" stroke-opacity="${op}"/>`}).join("");
   const gs=[...GRP.values()].sort((a,b)=>(b.rp||0)-(a.rp||0));
   $("#gnode").innerHTML=gs.map(g=>{
-    if(g.type==="B")return `<circle class="bub${g.unknown?" unk":""}" data-k="${g.k}" cx="${g.x}" cy="${g.y}"><title>${esc(g.label)}：${g.n} 位共同作者</title></circle>`;
+    if(g.type==="B")return `<circle class="bub${g.pole?" pole":""}${g.unknown?" unk":""}" data-k="${g.k}" cx="${g.x}" cy="${g.y}"><title>${g.pole?"暫放北極：":""}${esc(g.label)}${g.country?"（"+esc(g.country)+"）":""}：${g.n} 位共同作者</title></circle>`;
     if(g.type==="I"){const dim=SEL.county&&g.inst&&g.inst.cty!==SEL.county;
       return `<circle class="inst${SEL.inst===g.k.slice(1)?" sel":""}${dim?" dimc":""}" data-k="${g.k}" cx="${g.x}" cy="${g.y}"><title>${esc(g.label)}：${g.n} 位</title></circle>`}
     if(false)return `<circle data-k="${g.k}" cx="${g.x}" cy="${g.y}" r="${g.r}"><title>${esc(g.label)}：${g.n} 位</title></circle>`;
     const n=NODES[g.node];
     return `<circle class="nd${n.k?" ext":""}${SEL.node===g.node?" sel":""}" data-k="${g.k}" cx="${g.x}" cy="${g.y}"${n.k?"":` fill="${dcol[n.dept]||"#888"}"`}><title>${esc(n.name)}${n.k?"（非名冊）":""}　${esc(n.inst)}${n.dept?" · "+esc(n.dept):""}</title></circle>`}).join("");
-  rescale(); relabel();
+  rescale(); applyFold(true); relabel();
   $("#gnode").onpointerover=e=>{const c=e.target.closest('[data-k]');if(!c)return;const k=c.dataset.k;$("#gedge").querySelectorAll('line').forEach(l=>{const e=GEDG[+l.dataset.e];l.style.opacity=e.a===k||e.b===k?1:.035;if(e.a===k||e.b===k)l.setAttribute('stroke-opacity','.85')})};
-  $("#gnode").onpointerout=()=>{$("#gedge").querySelectorAll('line').forEach(l=>{l.style.opacity=1;l.setAttribute('stroke-opacity',GEDG[+l.dataset.e].l?'.5':'.24')})};
+  $("#gnode").onpointerout=()=>{$("#gedge").querySelectorAll('line').forEach(l=>{l.style.opacity=1;l.setAttribute('stroke-opacity',l.dataset.op)})};
 }
 $("#glab").addEventListener("click",e=>{const t=e.target.closest("[data-mapkey]");if(t){const k=t.dataset.mapkey;if(k[0]==="B")showBubble(N+ +k.slice(1));else if(k[0]==="I")selectInst(k.slice(1));else selectNode(+k.slice(1))}});
 $("#gnode").addEventListener("click",e=>{const c=e.target.closest("circle"); if(!c)return;
@@ -3686,7 +4023,7 @@ $("#gedge").addEventListener("click",e=>{const l=e.target.closest("line"); if(l)
 // ── Network layouts use a separate SVG, never a geographic background.
 let netVB=null;
 function renderNet(){
- cancelAnimationFrame(animId);
+ cancelAnimationFrame(animId);animTo=null;
  $("#netbox").hidden=false;svg.style.display="none";$("#netctl").hidden=false;
  const grouped=SEL.node==null&&!SEL.inst;
  let keys,links,objects;
@@ -3733,8 +4070,8 @@ function renderNet(){
  netVB={x,y,w:count?Math.max(...xs)-x+110:600,h:count?Math.max(...ys)-y+80:400};setNetVB(netVB);
  nsvg.innerHTML=links.map((e,i)=>{const p=pos.get(e.a),q=pos.get(e.b);return `<line data-link="${i}" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${e.l?'#d1583a':'#527fa8'}" stroke-opacity=".55" stroke-width="${Math.min(5,.8+Math.sqrt(e.c))}" vector-effect="non-scaling-stroke" class="edge"><title>${esc(objects.get(e.a).label)} — ${esc(objects.get(e.b).label)}：${e.c} 筆</title></line>`}).join("")+
  keys.map((k,j)=>{const p=pos.get(k),o=objects.get(k),rr=radius(k),full=o.label+(grouped?'':` · ${o.inst||'機構不明'}${o.dept?' · '+o.dept:''}`);
- return `<g data-key="${j}" class="netperson"><circle class="nd${!grouped&&o.k?' ext':''}${k===focal?' sel':''}" style="fill:${color(k)};fill-opacity:${!grouped&&o.k?.25:1}" cx="${p[0]}" cy="${p[1]}" r="${rr}" fill="${color(k)}"><title>${esc(full)} · ${degree.get(k)} 條關係</title></circle><text x="${p[0]+rr+4}" y="${p[1]+4}" style="font-size:12px;paint-order:stroke;stroke:#fcfcfd;stroke-width:3px;fill:#263c51" ${!$("#names").checked&&count>65&&k!==focal&&(grouped?false:o.k||degree.get(k)<2)?'class="hoverlabel"':''}>${esc(o.label)}</text></g>`}).join("");
- $("#netnote").textContent=(grouped?'機構／國家彙總':SEL.node!=null?'個人與直接合作對象':'機構成員與合作對象')+` · ${count} 節點 / ${links.length} 關係 · 顏色＝${internal?"系所":"機構"}，紅框＝非名冊 · 懸停顯示姓名／凸顯連線 · 滾輪縮放、空白處拖曳`;
+ return `<g data-key="${j}" class="netperson"><circle class="nd${!grouped&&o.k?' ext':''}${k===focal?' sel':''}" style="fill:${color(k)};fill-opacity:${!grouped&&o.k?.25:1}" cx="${p[0]}" cy="${p[1]}" r="${rr}" fill="${color(k)}"><title>${esc(full)} · ${degree.get(k)} 條關係</title></circle><text x="${p[0]+rr+4}" y="${p[1]+4}" style="font-size:12px;paint-order:stroke;stroke:#fcfcfd;stroke-width:3px;fill:#263c51" ${!$("#names").checked&&count>65&&k!==focal&&(grouped?(String(k)[0]==='B'&&o.n<5):o.k||degree.get(k)<2)?'class="hoverlabel"':''}>${esc(o.label)}</text></g>`}).join("");
+ $("#netnote").textContent=(grouped?'機構彙總':SEL.node!=null?'個人與直接合作對象':'機構成員與合作對象')+` · ${count} 節點 / ${links.length} 關係 · 顏色＝${internal?"系所":"機構"}，紅框＝非名冊 · 懸停顯示姓名／凸顯連線 · 滾輪縮放、空白處拖曳`;
  nsvg.onclick=e=>{if(netMoved)return;const nd=e.target.closest('[data-key]'),ln=e.target.closest('[data-link]');
  if(nd){const k=keys[+nd.dataset.key];if(grouped){if(k[0]==='I')selectInst(k.slice(1));else if(k[0]==='B')showBubble(N+ +k.slice(1));else selectNode(+k.slice(1))}else selectNode(k)}
  else if(ln){const link=links[+ln.dataset.link];grouped?showMapEdge(link.index):showEdge(link.index)}};
@@ -3824,11 +4161,14 @@ function selectNode(i,quiet){const n=NODES[i];if(!n)return;
     (js.length?`<h3>計畫（${js.length}）</h3><ul class="pl">`+js.slice(0,60)
       .map(p=>`<li>${esc(p[0])}<div class="m">${p[1]} · ${esc(p[2])}</div></li>`).join("")+`</ul>`:"");
   build();}
-function showBubble(i){const b=BUB[i-N];
+function showBubble(i){const b=BUB[i-N],vis=new Set(VIS),mem=b.members.filter(i=>vis.has(i));
+  const src={wikidata:"Wikidata 機構座標",openalex:"OpenAlex／ROR 城市座標（非機構本身）"}[b.src]||"";
   $("#details").innerHTML=`<span class="back" data-up="0">← 回全台</span>
-    <h2>${esc(b.label)} <span class="pill">${b.n} 位共同作者</span></h2>
-    <div class="k">國家中心的大圓方位，距離採單調壓縮；國家位置不是個別機構的精確地址。</div>
-    <h3>距離與位置</h3>`+rows([["相對台灣約略距離",b.km!=null?b.km.toLocaleString()+" km":"無可用座標"],["定位依據",b.km!=null?"國家中心／大圓方位":"獨立示意群組"]])+`<h3>最常出現的機構（完整資料）</h3>`+rows(b.top.map(t=>[t[0],t[1]+" 人"]))+`<h3>目前可見作者</h3><ul class="lst">`+b.members.filter(i=>VIS.includes(i)).map(i=>`<li data-n="${i}">${esc(NODES[i].name)}<div class="m">${esc(NODES[i].inst)}</div></li>`).join("")+`</ul>`}
+    <h2>${esc(b.label)} <span class="pill">${b.n} 位共同作者</span></h2>`+
+    (b.pole?`<div class="k">${b.unknown?"原始資料沒有這些作者的機構。":"有機構名稱，但查不到可靠的機構位置。"}暫時放在北極，不代表實際所在地。</div>`
+      :rows([["國家",b.country],["城市",b.city],["與台灣的大圓距離",b.km!=null?b.km.toLocaleString()+" km":""],["座標來源",src]]))+
+    `<h3>${b.pole?"資料中的機構名稱":"資料中的機構寫法"}</h3>`+rows(b.top.map(t=>[t[0],t[1]+" 人"]))+
+    `<h3>目前可見作者（${mem.length}）</h3><ul class="lst">`+mem.map(i=>`<li data-n="${i}">${esc(NODES[i].name)}<div class="m">${esc(NODES[i].inst)}</div></li>`).join("")+`</ul>`}
 function showMapEdge(k){const e=GEDG[k];if(!e)return;const a=GRP.get(e.a),b=GRP.get(e.b);
  const pairs=e.pairs.map(([a,b])=>EDG.findIndex(x=>x[0]===a&&x[1]===b&&x[4]===e.l)).filter(i=>i>=0);
  const records=new Set(pairs.flatMap(i=>[...EDG[i][5]]));
@@ -3847,7 +4187,7 @@ $("#side").addEventListener("click",e=>{const li=e.target.closest("li,.back"); i
   else if(li.dataset.c)selectCounty(li.dataset.c);
   else if(li.dataset.i)selectInst(li.dataset.i);
   else if(li.dataset.n)selectNode(+li.dataset.n)});
-function legendHTML(){if($("#view").value==='net')return `<div class="note">藍線＝共著，橘線＝計畫；線寬依合作成果筆數。個人節點越大，合作關係越多；彙總節點依作者人數縮放。校內顏色＝系所，跨機構顏色＝機構；紅框＝非名冊作者。單點代表目前條件下無合作連線。懸停顯示姓名並凸顯直接合作，可勾「所有姓名」。<br>位置是網路排列，沒有地理意義。預設只顯示涉及名冊作者的合作，可勾「含非名冊彼此合作」展開其他連線。</div>`;return `<div class="note"><b>閱讀方式</b><br>地圖：節點面積隨目前篩選下的作者人數縮放（小點有最小可點擊尺寸）；藍線＝共著，橘線＝計畫，線寬＝作者配對合作筆數。點機構看校內網路，點作者看直接合作對象。<br>台灣維持地理座標與中央位置；海外是國家中心的大圓方位，半徑依距離單調壓縮，並非同一地圖比例尺。兩側標籤以引線指回位置，顯示約略公里數；懸停節點凸顯合作連線。臺灣其他機構與未知位置為獨立示意群組。</div>`}
+function legendHTML(){if($("#view").value==='net')return `<div class="note">藍線＝共著，橘線＝計畫；線寬依合作成果筆數。個人節點越大，合作關係越多；彙總節點依作者人數縮放。校內顏色＝系所，跨機構顏色＝機構；紅框＝非名冊作者。單點代表目前條件下無合作連線。懸停顯示姓名並凸顯直接合作，可勾「所有姓名」。<br>位置是網路排列，沒有地理意義。預設只顯示涉及名冊作者的合作，可勾「含非名冊彼此合作」展開其他連線。</div>`;return `<div class="note"><b>閱讀方式</b><br>地圖：節點面積隨目前篩選下的作者人數縮放（小點有最小可點擊尺寸）；藍線＝共著，橘線＝計畫，線寬＝作者配對合作筆數。點機構看校內網路，點作者看直接合作對象。<br>整張圖是以台灣為中心的方位等距投影：離台灣的距離與方位都按真實比例，從台灣出發的直線就是大圓航線。非名冊機構（含海外）以灰點畫在機構座標上，大小＝作者人數；座標優先用 Wikidata 的機構位置，查不到時用 OpenAlex／ROR 的城市座標。找不到機構或位置的作者暫放北極（虛線圓）。預設視野是台灣，滾輪縮小或按「看全世界」看海外；懸停節點凸顯合作連線。北部機構較密：全台視野時臺北市、新北市只顯示臺大、政大、中研院經濟所與臺北大學，宜蘭大學、佛光大學、臺灣海洋大學、銘傳大學也先不顯示，bubble 也畫得比較小；點進縣市或放大（右下角放大鏡）後才顯示全部機構並恢復大小。</div>`}
 function updateFocusInfo(){
  const title=SEL.node!=null?"個人合作網路":SEL.inst?"機構合作網路":SEL.county?"縣市合作":"全台合作";
  const partners=SEL.node!=null?[...new Set(EDG.flatMap(e=>e.slice(0,2)).filter(i=>i!==SEL.node))]:[];
@@ -3885,7 +4225,7 @@ def stage9_html(outfile=None):
         out = os.path.join(outdir, out)
     with open(out, 'w', encoding='utf-8') as f:
         f.write(html)
-    print(f'  節點 {len(data["nodes"])}、泡泡 {len(data["bubbles"])}、'
+    print(f'  節點 {len(data["nodes"])}、外部機構群組 {len(data["bubbles"])}、'
           f'邊 {len(data["edges"])}　{os.path.getsize(out) // 1024} KB'
           f' → {os.path.relpath(out, ROOT)}')
     return out

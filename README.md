@@ -95,11 +95,13 @@ For a team of size `n`, edge tables retain both `weight_1n = 1/n` and `weight_pa
 
 ## How the map is drawn
 
-Python prepares the nodes, event edges, publication lists and simplified county boundaries, then embeds them in a single HTML document. Browser-side JavaScript draws the map and network with SVG and handles filtering and navigation.
+Python prepares the nodes, event edges, publication lists, simplified county boundaries and a simplified world basemap, then embeds them in a single HTML document. Browser-side JavaScript draws the map and network with SVG and handles filtering and navigation.
 
-At the national scale, researchers are grouped into institutional circles and relationships are aggregated between institutions. Opening an institution expands its researchers. The network view supports force-directed and circular layouts, with label propagation used for community coloring.
+At the national scale, researchers are grouped into institutional circles and relationships are aggregated between institutions. Northern Taiwan is dense, so the national view draws smaller circles and hides some institutions: Taipei City and New Taipei City show only National Taiwan University, National Chengchi University, the Institute of Economics at Academia Sinica and National Taipei University, and National Ilan University, Fo Guang University, National Taiwan Ocean University and Ming Chuan University are also hidden. Hidden institutions and their connections appear, and circles return to full size, after selecting a county or zooming in with the scroll wheel or the magnifier buttons at the lower right of the map. Opening an institution expands its researchers. The network view supports force-directed and circular layouts, with label propagation used for community coloring.
 
-Institutional locations are geographic anchors. Overseas groups use country-level direction and a compressed distance layout; they do not locate individual institutions precisely. Unknown affiliations form a separate schematic group. Geographic distance should be calculated from appropriate coordinates, not measured from the displayed layout.
+The whole map uses one azimuthal equidistant projection centred on Taiwan (23.7°N, 121°E). Distances and bearings measured from Taiwan are to scale, and a straight line leaving Taiwan follows the great-circle route; distances between two places elsewhere are distorted, increasingly so far from Taiwan. The default view frames Taiwan. Zoom out or use **看全世界** to see the rest of the world. Other countries come from Natural Earth 1:50m boundaries and serve only as background: they have no subdivisions and cannot be clicked.
+
+Roster institutions use their campus coordinates. Non-roster institutions, in Taiwan and overseas, are drawn at the institution's own location. Each affiliation is matched to an OpenAlex institution, through the coauthor's OpenAlex affiliations or a reviewed decision table. The map uses the institution's Wikidata coordinate when it lies within 80 km of the OpenAlex city coordinate, and the OpenAlex/ROR city coordinate otherwise; each institution's panel names the source. Coauthors without an affiliation, and affiliations that could not be located, are placed at the North Pole. That position is a placeholder, not a location. Geographic distance should be calculated from coordinates, not measured from the displayed layout.
 
 ## Repository and rebuilding
 
@@ -115,6 +117,8 @@ The repository contains visualization and analysis code, selected rendered outpu
 | `analysis/` | Selected rendered HTML reports and figures |
 
 Viewing the map requires only a browser. Rebuilding requires the excluded input tables, geographic boundaries, caches and review decisions. The current pipeline expects preparation folders such as `faculty_and_map`, `faculty_identity`, `collab_pubs` and `collab_network` beside this repository directory. If your preparation folders live elsewhere, their input paths must be adapted before running the pipeline.
+
+The world basemap (`ne_50m_admin_0_countries.geojson` from Natural Earth) is read from the preparation basemap folder or `basemap copy/`. Institution locations come from `cache/institution_geo.json` and `manual_review/decisions/external_institution_geo.csv`. When online, `--html` fills in institutions missing from the cache with OpenAlex filter queries (1 credit per 50 institutions) and Wikidata's public SPARQL endpoint; with `--offline` it uses the cache only.
 
 With the local inputs restored, the workflow is:
 
