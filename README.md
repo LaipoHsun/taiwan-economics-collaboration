@@ -10,7 +10,7 @@ This side project brings together faculty rosters, publication records and resea
 
 ## Open the map
 
-Download this repository using **Code → Download ZIP**, extract it, and open [`index.html`](index.html) in a browser. You can also open [`html/map_explorer.html`](html/map_explorer.html) directly. No installation, Python environment or server is needed. GitHub’s file viewer displays the HTML source; download the file or use a GitHub Pages deployment to interact with it.
+Download this repository using **Code → Download ZIP**, extract it, and open [`index.html`](index.html) in a browser. You can also open [`output/html/map_explorer.html`](output/html/map_explorer.html) directly. No installation, Python environment or server is needed. GitHub’s file viewer displays the HTML source; download the file or use a GitHub Pages deployment to interact with it.
 
 The interface is in Traditional Chinese. Start with these controls:
 
@@ -27,9 +27,19 @@ The map includes its display data and geographic boundaries in the HTML file. It
 
 The starting roster contains **520 researchers across 27 institutions**, including economics, political economy and agricultural economics units, alongside selected Academia Sinica researchers. Of those researchers, 421 have a publication or project record in the study window; 99 have neither in the collected records.
 
-The bundled map contains 421 roster researchers, 4,048 external coauthors, 5,085 publication entries and 1,975 project-year entries. These are counts from the HTML snapshot. The local cleaned publication table contains 5,099 records; the viewer and the full table are not interchangeable exports.
+The local map rebuilt on **15 October 2026** contains 421 roster researchers, 3,690 external coauthors, 5,085 publication entries and **2,159 project-year entries**. The cleaned project table contains **2,116 same-title project families**. Its project network has **354 event rows connecting 145 distinct researcher pairs**; 320 event rows have registrations from both researchers in the same year. Together with 14,585 coauthorship event rows, the HTML contains 14,939 event rows across the two layers.
 
-“External” means outside the roster, including collaborators at the same institution. It does not necessarily mean overseas. The roster is a collection-time snapshot, not a reconstruction of every researcher’s employment history. Records for 2026 are incomplete at collection time in September 2026.
+The local cleaned publication table contains 5,099 records; 5,085 have author information and are included in the viewer. The HTML embeds a compact display payload, so the viewer and the complete analysis tables are not interchangeable exports. These counts describe the verified local build; updating local files does not deploy the GitHub Pages site.
+
+“External” means outside the roster, including collaborators at the same institution. It does not necessarily mean overseas. The roster is a collection-time snapshot, not a reconstruction of every researcher’s employment history. Publications retain their previous collection snapshot; project pages were refreshed on 15 October 2026. Records for 2026 remain incomplete and should not be compared with complete years as annual totals.
+
+### Project data repair on 15 October 2026
+
+The September crawl had cached incomplete project-overview pages for 30 researchers. A project-only refresh of all 463 roster members with resolved NSTC profile identifiers restored **286 source rows**, increasing the all-year raw project table from 5,103 to **5,389 rows**. Each accepted page was checked against a second observation and against its previous records. Existing record identifiers were retained. Publication records, publication-page caches and the faculty roster were unchanged.
+
+Of the restored rows, 192 fall within the network's 2015–2026 window; all are represented in the rebuilt project table. The other 94 fall outside that window. After title-and-year grouping, the cleaned project table increased from 1,975 to 2,159 rows, and the project network from 348 to 354 event rows. Different row counts reflect different periods and units: raw researcher registrations, grouped project years and pairwise collaboration events.
+
+For the separate funding analysis, the 2015–2025 principal-investigator subset now contains **1,799 source records totaling NT$2,349,058,066** in listed approved funding. Seven records have no amount. The defined personal-research categories account for **NT$1,893,162,671**. Amounts are parsed from the cached project pages and aligned to the raw CSV; they are not stored in `projects_all.csv` or the raw project CSV. These are approved amounts assigned to the listed starting year, not expenditures or a count of uniquely identified official grant awards.
 
 ## How the records were collected
 
@@ -48,7 +58,7 @@ The collaboration records used here come from NSTC researcher profiles. For each
 | Publication list (`initRsm05`) | Publication date, category, title, author list and venue |
 | Project overview (`initRsm17new`) | ROC year, grant category, discipline code, project title and role |
 
-The parser identifies columns by their table-header labels. A page with unexpected headers is logged as a parsing problem instead of being treated as an empty record. An explicit “no records” response is handled separately.
+The parser identifies columns by their table-header labels. A page with unexpected headers is logged as a parsing problem instead of being treated as an empty record. The original parser could accept a truncated page or a transient “no records” response; the October project-only refresh additionally required matching repeated observations and retention of all previously observed rows. Empty pages were accepted only after repeated agreement and when no previous project rows existed.
 
 Requests are cached on disk and use delays and retries. Each extracted row retains a source record identifier, its roster owner and retrieval time, so the cleaned records can be traced back to the collection step. Departmental and personal publication lists are not added as a second publication corpus in this final dataset.
 
@@ -59,6 +69,10 @@ The initial crawlers live in the local preparation workspace and are not include
 OpenAlex supplies additional author identifiers, publication and citation totals, research fields and affiliation evidence. Candidate author matches are checked against identifiers and appearances in the researcher’s known papers. These totals describe the OpenAlex profile at retrieval time, rather than only the 2015–2026 study window.
 
 External affiliations also use publication metadata, journal PDF author notes and documented source checks. The merge prefers verified corrections, then journal evidence, matched works, last-known OpenAlex affiliation, Crossref metadata and prior evidence. Original affiliation text is retained alongside normalized institution names. Unresolved identities and missing affiliations remain marked as such.
+
+External coauthors have no department field in the source records. For the map, a department is parsed from affiliation text that matches the coauthor's current institution: verified corrections and journal notes first, then OpenAlex raw affiliation strings (the most frequent unit, ties broken by the most recent year), then other publication metadata. The viewer shows the parsed unit, its source and the original affiliation text. When the unit matches a roster department at the same institution, the coauthor shares that department's colour in the within-institution network. No department is inferred when the text does not state one. "Soochow University" exists in Taipei and Suzhou; it is assigned to the Taipei roster institution only when the recorded country is Taiwan.
+
+On 15 October 2026, affiliations for 23 external coauthors were confirmed manually and written into the affiliation table, 121 external nodes were merged into another node for the same person (shared OpenAlex author ID, a shared roster coauthor, or a manual review of same-name nodes), six external nodes were merged back into the roster researchers they represent, and external nodes without any remaining publication (358 in total, including the merged ones) were dropped. Non-academic organisations confirmed in this review (banks, hospitals, an exchange and companies) are marked as "third-party" institutions and drawn in orange.
 
 ## How the records become networks
 
@@ -110,28 +124,57 @@ The repository contains the visualization pipeline, the rendered map and this do
 | Location | Contents |
 | --- | --- |
 | `index.html` | Entry point for the interactive map |
-| `html/map_explorer.html` | Standalone map snapshot |
-| `code/pipeline.py` | Cleaning, network construction, enrichment and rendering |
+| `output/html/map_explorer.html` | Standalone map snapshot |
+| `build.py` | Single entry point: rebuilds `input/` and the map, then validates the result |
+| `code/pipeline/pipeline.py` | Cleaning, network construction, enrichment, derived tables and rendering |
+| `code/html/build_map.py` | Entry point that renders the map from `input/` only |
+| `code/analysis/load_data.py` | Loader used by all analyses (`load()`, `load_grants()`); reads `input/` only |
+| `analyses/funding_analysis/`, `analyses/collaboration_analysis/` | Analysis programs (`code/`) and their figures (`output/*.png`); written notes stay local |
 
-Viewing the map requires only a browser. Rebuilding requires the excluded input tables, geographic boundaries, caches and review decisions. The current pipeline expects preparation folders such as `faculty_and_map`, `faculty_identity`, `collab_pubs` and `collab_network` beside this repository directory. If your preparation folders live elsewhere, their input paths must be adapted before running the pipeline.
+The local working copy is organised so that **everything the map and the analyses read lives in `input/`**. Only the files in the table above are published.
 
-The world basemap (`ne_50m_admin_0_countries.geojson` from Natural Earth) is read from the preparation basemap folder or `basemap copy/`. Institution locations come from `cache/institution_geo.json` and `manual_review/decisions/external_institution_geo.csv`. When online, `--html` fills in institutions missing from the cache with OpenAlex filter queries (1 credit per 50 institutions) and Wikidata's public SPARQL endpoint; with `--offline` it uses the cache only.
+| Folder | Contents |
+| --- | --- |
+| `decisions/` | Human review decisions only: confirmed affiliations, institution locations, node merges, roster gender and PhD corrections, web-verified affiliations |
+| `raw_data/cache/` | OpenAlex, Crossref, Wikidata and journal PDF responses |
+| `raw_data/generated/` | Intermediate files written by the pipeline (author-list repairs, journal affiliations, lookup queue); overwritten on every build |
+| `input/` | Cleaned tables read by the map and analyses: `paper/`, `project/` (including `grants.csv` with approved amounts), `network/`, `map/` (including `external_places.csv` and `basemap/`), `professor_demo/` (including `external_departments.csv`), and `BUILD.json` |
+| `code/` | `pipeline/` (cleaning pipeline), `html/` (map rendering), `analysis/` (`load_data.py`) |
+| `output/` | `html/` (rendered maps), `manual_review/` (review spreadsheets) |
 
-With the local inputs restored, the workflow is:
+### Which local data to use
+
+Use **`input/` as the only data source** for the map and downstream analyses, through `code/analysis/load_data.py` (`load()`, `load_grants()`). Neither the map nor the loader reads caches, review decisions or the preparation folders directly; those are consumed only by the build. Do not reconstruct the analysis dataset from the HTML or use a Markdown summary as a data source.
+
+| Purpose | Table in `input/` |
+| --- | --- |
+| Researcher and external-author nodes | `professor_demo/authors_master.csv`; `professors_inactive.csv` for the full 520-person roster |
+| Roster attributes | `professor_demo/roster_gender.csv`, `roster_phd.csv`, `roster_field_jel.csv`, merged by the loader |
+| External-author locations and departments | `map/external_places.csv`, `professor_demo/external_departments.csv` |
+| Publications and their author sets | `paper/papers_all.csv` |
+| Project-year groups and member sets | `project/projects_all.csv` |
+| Project records with approved amounts | `project/grants.csv` (parsed from cached NSTC pages during the build) |
+| Collaboration events | `network/paper_network_edges.csv`, `project_network_edges.csv` |
+| Build stamp | `BUILD.json`: build time, table counts and checksums of every decision table and input table |
+
+The analysis programs in `analyses/funding_analysis/` and `analyses/collaboration_analysis/` read only these tables; their figures are in each folder's `output/`. The main funding and collaboration comparisons use **2015–2025**, while the map includes **2015–2026**. Their counts need not match without aligning the period, role, category and unit of observation.
+
+Viewing the map requires only a browser. Rebuilding requires the excluded tables, caches and review decisions, and the preparation folders (`collab_network`, `collab_pubs`, `faculty_identity`, `faculty_and_map`, `claude_openalex_match`) in a `前置data處理/` folder beside this repository directory. When online, the build fills in institutions missing from the cache with OpenAlex filter queries (1 credit per 50 institutions) and Wikidata's public SPARQL endpoint; offline it uses the cache only.
 
 ```bash
-# Run from the repository root. Requires the private preparation inputs.
-python3 -m pip install matplotlib openpyxl pypdf
-python3 code/pipeline.py --offline
+# Rebuild input/ and the map from the preparation data and review decisions, then validate (offline).
+python3 build.py
 
-# Render the viewer to its published location.
-python3 code/pipeline.py --html --out "$PWD/html/map_explorer.html"
+# Only validate the current input/ and map.
+python3 build.py --check
 
 # Render a static network for a selected time window.
-python3 code/pipeline.py --map --layer both --year-from 2020 --year-to 2023
+python3 code/html/build_map.py --map --layer both --year-from 2020 --year-to 2023
 ```
 
-The default pipeline runs author-list repair, dataset construction, OpenAlex enrichment, journal affiliation extraction, affiliation merging and review-sheet generation. Crossref enrichment is optional (`--with-crossref`). Offline mode uses existing local inputs and caches; it cannot recreate missing source data. Online OpenAlex requests read `OPENALEX_API_KEY` from the environment or the local key file used by the pipeline.
+Stage 2 recreates the researcher tables, so stages 3 and 6 follow it to restore existing enrichment. This project-only workflow assumes existing author-list decisions and journal-affiliation extraction results; it does not rerun those stages or infer roster attributes. The full default pipeline additionally runs author-list repair, journal extraction and review-sheet generation, and is unnecessary for this refresh. In particular, the existing journal PDF fetch path can still request a missing file, so running every default stage is not an assurance of an entirely offline refresh. Crossref enrichment is optional (`--with-crossref`). The explicit workflow above uses existing local inputs and caches; it cannot recreate missing source data. Online OpenAlex requests read `OPENALEX_API_KEY` from the environment or the local key file used by the pipeline.
+
+Map rendering and the sibling analysis scripts do not automatically rewrite hand-authored Markdown summaries or fixed captions. Recheck those descriptions against the computed outputs whenever source data changes.
 
 To publish the viewer with GitHub Pages, upload the contents of this directory as the repository root. In **Settings → Pages**, choose **Deploy from a branch**, select the uploaded branch and **/(root)**. The root `index.html` opens the map. Use the site URL shown by GitHub; no deployment URL is assumed here.
 

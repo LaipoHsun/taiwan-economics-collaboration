@@ -10,10 +10,10 @@
 
 | # | 階段 | 做什麼 | 產出 |
 |---|---|---|---|
-| 1 | `fix_author_lists`  | 修復壞掉的作者名單（切錯的、碎片、名單不完整的 7 篇） | `manual_review/decisions/author_list_fixes.csv` |
+| 1 | `fix_author_lists`  | 修復壞掉的作者名單（切錯的、碎片、名單不完整的 7 篇） | `raw_data/generated/author_list_fixes.csv` |
 | 2 | `build`             | 主建置：論文／計畫／名冊／兩層網路／地圖 | `paper/` `project/` `professor_demo/` `network/` `map/` |
 | 3 | `enrich`            | OpenAlex：總發表量、總被引數、領域 | `professor_demo/` 加欄 |
-| 4 | `journal_pdf`       | 三份中文期刊 PDF ＋ 上網查證結果 → 外部作者機構 | `decisions/external_affiliations_journal.csv` |
+| 4 | `journal_pdf`       | 三份中文期刊 PDF ＋ 上網查證結果 → 外部作者機構 | `raw_data/generated/external_affiliations_journal.csv` |
 | 5 | `crossref`          | Crossref metadata → 外部作者機構（收穫少，預設不跑） | `cache/crossref_affiliations.json` |
 | 6 | `external_affil`    | 彙整所有機構來源、正規化，寫回 CSV | `professor_demo/authors_master.csv` |
 | 7 | `review_sheets`     | 產生人工查核用的 Excel（不覆蓋既有檔） | `manual_review/*.xlsx` |
@@ -28,10 +28,20 @@ import argparse, collections, csv, difflib, hashlib, itertools, json, math, os, 
 import time, unicodedata, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-FINAL = os.path.dirname(HERE)
+HERE = os.path.dirname(os.path.abspath(__file__))          # final_plan/code/pipeline
+FINAL = os.path.dirname(os.path.dirname(HERE))             # final_plan
 ROOT = os.path.dirname(FINAL)
-DEC_DIR = os.path.join(FINAL, 'manual_review', 'decisions')
+# 上游前置資料夾（collab_network、faculty_and_map…）放在 ROOT/前置data處理；舊配置放在 ROOT 底下
+UPSTREAM = (os.path.join(ROOT, '前置data處理')
+            if os.path.isdir(os.path.join(ROOT, '前置data處理')) else ROOT)
+INPUT = os.path.join(FINAL, 'input')                       # 清理後的資料（給 html / analysis 用）
+OUTPUT = os.path.join(FINAL, 'output')
+RAW = os.path.join(FINAL, 'raw_data')
+CACHE_DIR = os.path.join(RAW, 'cache')
+BASEMAP_DIR = os.path.join(INPUT, 'map', 'basemap')        # 縣市界、世界國界（HTML 底圖）
+DEC_DIR = os.path.join(FINAL, 'decisions')                 # 只放人工判斷的表格
+GEN_DIR = os.path.join(RAW, 'generated')                   # 程式產生的中間檔（會被覆寫，不要手改）
+HTML_OUT = os.path.join(OUTPUT, 'html')
 MAILTO = 'stone930801@gmail.com'
 HTTP_UA = {'User-Agent': f'NetSciX2027-collab-network/0.1 (mailto:{MAILTO})'}
 OFFLINE = False          # --offline 會把它設成 True，所有連網動作直接跳過
@@ -42,7 +52,8 @@ OFFLINE = False          # --offline 會把它設成 True，所有連網動作�
 # ═══════════════════════════════════════════════════════════════
 def rd(*p):
     """讀專案裡的 CSV（路徑相對專案根目錄），順手剝掉 UTF-8 BOM。"""
-    with open(os.path.join(ROOT, *p), newline='', encoding='utf-8-sig') as f:
+    base = ROOT if p[0] == 'final_plan' else UPSTREAM
+    with open(os.path.join(base, *p), newline='', encoding='utf-8-sig') as f:
         return list(csv.DictReader(f))
 
 
@@ -115,10 +126,10 @@ _oa = _OpenAlexAPI()
 #   professors_inactive.csv  名冊裡這 12 年沒有任何發表或計畫的教師
 #   openalex_not_found.xlsx  找不到 OpenAlex 數字的人，附原因與被擋下的候選
 #   external_not_found.xlsx  連機構都查不到的外部共同作者，附原因與代表作
-MASTER = os.path.join(FINAL, 'professor_demo', 'authors_master.csv')
-INACTIVE = os.path.join(FINAL, 'professor_demo', 'professors_inactive.csv')
-OA_NOT_FOUND = os.path.join(FINAL, 'professor_demo', 'openalex_not_found.xlsx')
-EXT_NOT_FOUND = os.path.join(FINAL, 'professor_demo', 'external_not_found.xlsx')
+MASTER = os.path.join(INPUT, 'professor_demo', 'authors_master.csv')
+INACTIVE = os.path.join(INPUT, 'professor_demo', 'professors_inactive.csv')
+OA_NOT_FOUND = os.path.join(OUTPUT, 'manual_review', 'openalex_not_found.xlsx')
+EXT_NOT_FOUND = os.path.join(OUTPUT, 'manual_review', 'external_not_found.xlsx')
 
 
 def read_master():
@@ -424,22 +435,22 @@ def stage1_fix_author_lists():
             'evidence': ev, 'note': note,
         })
 
-    os.makedirs(DEC_DIR, exist_ok=True)
-    path = os.path.join(DEC_DIR, 'author_list_fixes.csv')
+    os.makedirs(GEN_DIR, exist_ok=True)
+    path = os.path.join(GEN_DIR, 'author_list_fixes.csv')
     with open(path, 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=FIX_FIELDS)
         w.writeheader()
         w.writerows(rows)
 
     # 新節點的姓名，build.py 要用來補 external_coauthors
-    with open(os.path.join(DEC_DIR, 'new_external_nodes.csv'), 'w', newline='', encoding='utf-8') as f:
+    with open(os.path.join(GEN_DIR, 'new_external_nodes.csv'), 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
         w.writerow(['node_id', 'name'])
         for k, nid in sorted(created.items(), key=lambda kv: kv[1]):
             w.writerow([nid, node_name.get(nid, '')])
 
     c = collections.Counter(r['rule'] for r in rows)
-    print('decisions/author_list_fixes.csv：%d 篇' % len(rows))
+    print('raw_data/generated/author_list_fixes.csv：%d 篇' % len(rows))
     for k, v in c.most_common():
         print(f'  {k}: {v}')
     print('  新建的外部節點:', len(created))
@@ -457,8 +468,8 @@ YEAR_MIN, YEAR_MAX = 2015, 2026
 YEARS = list(range(YEAR_MIN, YEAR_MAX + 1))
 
 
-def up(*p):   return os.path.join(ROOT, *p)
-def out(*p):  return os.path.join(FINAL, *p)
+def up(*p):   return os.path.join(UPSTREAM, *p)
+def out(*p):  return os.path.join(INPUT, *p)
 
 # 上游（唯讀）
 SRC_PAPERS        = up('collab_network', 'output', 'papers.csv')
@@ -473,8 +484,10 @@ SRC_MAP_ROSTER    = up('faculty_and_map', 'output', 'main_result', 'faculty_rost
 SRC_MAP_INST      = up('faculty_and_map', 'output', 'main_result', 'institutions.csv')
 SRC_IDENTITY_BY_RECORD = up('collab_network', 'notes_ambiguity', 'review',
                             'identity_changes_by_record.csv')
-DEC_AUTHOR_FIXES = out('manual_review', 'decisions', 'author_list_fixes.csv')
-DEC_NEW_NODES    = out('manual_review', 'decisions', 'new_external_nodes.csv')
+DEC_AUTHOR_FIXES = os.path.join(GEN_DIR, 'author_list_fixes.csv')      # 第 1 階段產生
+DEC_NEW_NODES    = os.path.join(GEN_DIR, 'new_external_nodes.csv')     # 第 1 階段產生
+# 人工確認的節點合併：外部節點 from_node_id 的論文改掛到 to_node_id（另一個外部節點或名冊 teacher_id），from 節點不再輸出
+DEC_NODE_MERGES  = os.path.join(DEC_DIR, 'external_node_merges.csv')
 
 
 def read(path):
@@ -1058,7 +1071,38 @@ EXT_FIELDS = ['node_id', 'name_zh', 'name_en', 'identity_status', 'identity_name
               'same_name_candidate_node_ids_json', 'source_record_ids_json']
 
 
-def build_externals(papers, paper_edges):
+def apply_node_merges(papers):
+    """套用 external_node_merges.csv：論文作者名單裡的 from_node_id 換成 to_node_id（同一篇裡重複的只留一個）。
+    to_node_id 可以是另一個外部節點（同一人被拆開），也可以是名冊教師的 teacher_id（名冊學者被當成外部作者）。"""
+    if not os.path.exists(DEC_NODE_MERGES):
+        return papers, {}
+    with open(DEC_NODE_MERGES, newline='', encoding='utf-8-sig') as f:
+        merges = {r['from_node_id']: r['to_node_id'] for r in csv.DictReader(f)}
+    n = 0
+    for p in papers:
+        ids = json.loads(p['author_node_ids_json'])
+        if not any(i in merges for i in ids):
+            continue
+        names = json.loads(p.get('author_names_json') or '[]')
+        names = names if len(names) == len(ids) else [''] * len(ids)
+        keep = {}
+        for i, nm in zip(ids, names):
+            keep.setdefault(merges.get(i, i), nm)       # 作者名單與姓名一起換，重複的只留第一個
+        p['author_node_ids_json'] = j(list(keep))
+        if p.get('author_names_json'):
+            p['author_names_json'] = j(list(keep.values()))
+        p['n_authors'] = len(keep)
+        # to_node_id 可以是名冊教師（teacher_id）：名冊作者欄位跟著重算
+        tids = sorted(i for i in keep if not i.startswith('EXT'))
+        p['teacher_ids_json'] = j(tids)
+        p['n_roster_authors'] = len(tids)
+        n += 1
+    print(f'  外部節點合併：{len(merges)} 組，改到 {n} 篇論文')
+    return papers, merges
+
+
+def build_externals(papers, paper_edges, merges=None):
+    merges = merges or {}
     nodes = [n for n in read(SRC_NODES) if n['node_type'] == 'external']
     # 作者名單修復時新建的節點（`EXT-N-`）：名字讀得出來、但上游沒有替它開節點
     if os.path.exists(DEC_NEW_NODES):
@@ -1088,9 +1132,18 @@ def build_externals(papers, paper_edges):
             if otid:
                 deg_t[me].add(otid)
             stre[me] += e['weight_1n']
-    rows = []
+    # 合併進來的節點：別名與來源紀錄併到保留的節點
+    by_id = {n['node_id']: n for n in nodes}
+    for a, b in merges.items():
+        if a in by_id and b in by_id:
+            for k in ('aliases_json', 'source_record_ids_json'):
+                by_id[b][k] = j(list(dict.fromkeys(json.loads(by_id[b][k] or '[]') + json.loads(by_id[a][k] or '[]'))))
+    rows, dropped = [], 0
     for n in nodes:
         y = years.get(n['node_id'], {})
+        if not y:            # 沒有任何論文的外部節點（被合併掉的、作者名單修正後空掉的）不輸出
+            dropped += 1
+            continue
         rows.append({
             'node_id': n['node_id'],
             'name_zh': n['name_zh'], 'name_en': n['name_en'],
@@ -1112,6 +1165,7 @@ def build_externals(papers, paper_edges):
             'source_record_ids_json': n['source_record_ids_json'],
         })
     rows.sort(key=lambda r: (-r['n_papers'], r['node_id']))
+    print(f'  外部節點：{len(rows)} 個有論文；{dropped} 個沒有論文、不輸出')
     return rows
 
 
@@ -1175,11 +1229,12 @@ def build_map(active, inactive, paper_edges, project_edges):
 def stage2_build():
     papers = build_papers()
     papers, decisions_log = apply_paper_decisions(papers)
+    papers, merges = apply_node_merges(papers)
     projects, fam, fam_year_members = build_projects()
     paper_edges = build_paper_edges(papers)
     project_edges = build_project_edges(projects, fam, fam_year_members)
     active, inactive = build_professors(papers, projects, paper_edges, project_edges)
-    externals = build_externals(papers, paper_edges)
+    externals = build_externals(papers, paper_edges, merges)
     geo, insts = build_map(active, inactive, paper_edges, project_edges)
 
     # ── 驗收（不通過就中止，不留半套輸出）
@@ -1265,7 +1320,7 @@ def stage2_build():
 # ═══════════════════════════════════════════════════════════════
 # 階段 3：OpenAlex 補值
 # ═══════════════════════════════════════════════════════════════
-OA_CACHE = os.path.join(FINAL, 'cache')
+OA_CACHE = CACHE_DIR
 OA_BATCH = 50            # openalex_id filter 一次帶幾個 id（URL 長度限制）
 
 
@@ -1445,6 +1500,10 @@ def fetch_authors_by_filter(kind, values, per_call=50):
     cpath = os.path.join(OA_CACHE, f'openalex_{kind}.json')
     got = json.load(open(cpath, encoding='utf-8')) if os.path.exists(cpath) else {}
     todo = [v for v in values if v not in got]
+    if OFFLINE:                              # 離線：只用快取，沒快取到的就當作查不到
+        if todo:
+            print(f'  {kind}：快取 {len(got)}，離線略過 {len(todo)}')
+        return got
     if todo:
         print(f'  {kind}：快取 {len(got)}，待抓 {len(todo)}')
     for i in range(0, len(todo), per_call):
@@ -1481,6 +1540,8 @@ def search_teacher(name_en):
         _SEARCH_CACHE = json.load(open(cpath, encoding='utf-8')) if os.path.exists(cpath) else {}
     if name_en in _SEARCH_CACHE:
         d = _SEARCH_CACHE[name_en]
+    elif OFFLINE:
+        return None
     else:
         d = _oa.get('authors', {'search': name_en, 'per_page': 25})
         _SEARCH_CACHE[name_en] = d
@@ -1615,14 +1676,14 @@ def inst_of_ours(r, is_roster):
 def stage3_enrich(fetch=True, search_teachers=True):
     """fetch：連 OpenAlex 抓 ORCID 與 author 物件（1 credit / 50 人，很便宜）。
     search_teachers：對仍無候選的名冊教師做姓名查詢（10 credits / 人，貴；有快取）。"""
-    args = argparse.Namespace(fetch=fetch and not OFFLINE,
-                              search_teachers=search_teachers and not OFFLINE)
+    # 離線時照樣走這兩步，但 fetch_authors_by_filter／search_teacher 只讀快取、不連網
+    args = argparse.Namespace(fetch=fetch, search_teachers=search_teachers)
     stamp = datetime.now(timezone.utc).isoformat(timespec='seconds')
 
     nodes = {n['node_id']: n for n in rd('collab_network', 'output', 'author_teacher_id_by_gpt.csv')}
     master = {m['teacher_id']: m for m in rd('faculty_identity', 'faculty_identity_master.csv')}
     all_rows, active, ext = read_master()
-    inactive = rd('final_plan', 'professor_demo', 'professors_inactive.csv')
+    inactive = rd('final_plan', 'input', 'professor_demo', 'professors_inactive.csv')
 
     cand, orcid_want, own = resolve_offline(nodes, master)
 
@@ -1735,10 +1796,10 @@ def stage3_enrich(fetch=True, search_teachers=True):
 # ═══════════════════════════════════════════════════════════════
 # 階段 4：期刊 PDF ＋ 上網查證 → 外部作者機構
 # ═══════════════════════════════════════════════════════════════
-PDFDIR = os.path.join(FINAL, 'cache', 'journal_pdf')
-JOURNAL_OUT = os.path.join(FINAL, 'manual_review', 'decisions', 'external_affiliations_journal.csv')
-WEB_IN = os.path.join(FINAL, 'manual_review', 'decisions', 'external_affiliations_web.csv')
-WEB_QUEUE = os.path.join(FINAL, 'manual_review', 'decisions', 'web_lookup_queue.csv')
+PDFDIR = os.path.join(CACHE_DIR, 'journal_pdf')
+JOURNAL_OUT = os.path.join(GEN_DIR, 'external_affiliations_journal.csv')   # 第 4 階段產生
+WEB_IN = os.path.join(DEC_DIR, 'external_affiliations_web.csv')
+WEB_QUEUE = os.path.join(GEN_DIR, 'web_lookup_queue.csv')                   # 第 6 階段產生
 HTTP_UA = {'User-Agent': 'NetSciX2027-collab-network/0.1 (mailto:stone930801@gmail.com)'}
 
 TER_SEASON = 'https://econ.ntu.edu.tw/ter/new/js/season-data.js'
@@ -2069,7 +2130,7 @@ def stage4_journal(limit=0, journal=None):
             if nm:
                 name2node.setdefault(nname(nm), r['node_id'])
 
-    papers = rd('final_plan', 'paper', 'papers_all.csv')
+    papers = rd('final_plan', 'input', 'paper', 'papers_all.csv')
     target = {}
     for p in papers:
         if not (set(json.loads(p['author_node_ids_json'])) & set(missing)):
@@ -2208,7 +2269,7 @@ def stage4_journal(limit=0, journal=None):
 # ═══════════════════════════════════════════════════════════════
 # 階段 5：Crossref → 外部作者機構
 # ═══════════════════════════════════════════════════════════════
-CROSSREF_CACHE = os.path.join(FINAL, 'cache', 'crossref')
+CROSSREF_CACHE = os.path.join(CACHE_DIR, 'crossref')
 MAILTO = 'stone930801@gmail.com'
 HTTP_UA = {'User-Agent': f'NetSciX2027-collab-network/0.1 (mailto:{MAILTO})'}
 
@@ -2267,7 +2328,7 @@ def stage5_crossref(limit=0):
 
     _, _, ext = read_master()
     missing = {r['node_id']: r for r in ext if r.get('affil_source', 'none') == 'none'}
-    papers = rd('final_plan', 'paper', 'papers_all.csv')
+    papers = rd('final_plan', 'input', 'paper', 'papers_all.csv')
 
     # 這些人的姓名鍵 → node_id
     key2node = {}
@@ -2306,7 +2367,7 @@ def stage5_crossref(limit=0):
 
     # 結果存成快取，讓 `external_affiliations.py` 去套用與正規化。
     # 這樣階段 2 重跑、主檔重生也不會掉。
-    cp = os.path.join(FINAL, 'cache', 'crossref_affiliations.json')
+    cp = os.path.join(CACHE_DIR, 'crossref_affiliations.json')
     prev = json.load(open(cp, encoding='utf-8')) if os.path.exists(cp) else {}
     for nid, c in found.items():
         prev.setdefault(nid, {})
@@ -2389,19 +2450,19 @@ MISS_FIELDS = ['node_id', 'name_zh', 'name_en', 'identity_status', 'n_papers',
 def stage6_external():
     all_rows, _, ext = read_master()
     mwa = rd('claude_openalex_match', 'output', 'matched_work_authorships.csv')
-    man_path = os.path.join(FINAL, 'manual_review', 'decisions', 'external_affiliations_manual.csv')
+    man_path = os.path.join(DEC_DIR, 'external_affiliations_manual.csv')
     manual = {}
     if os.path.exists(man_path):
         with open(man_path, newline='', encoding='utf-8-sig') as f:
             manual = {r['node_id']: r for r in csv.DictReader(f)}
-    jr_path = os.path.join(FINAL, 'manual_review', 'decisions', 'external_affiliations_journal.csv')
+    jr_path = os.path.join(GEN_DIR, 'external_affiliations_journal.csv')
     journal = {}
     if os.path.exists(jr_path):
         with open(jr_path, newline='', encoding='utf-8-sig') as f:
             journal = {r['node_id']: r for r in csv.DictReader(f)}
-    cr_path = os.path.join(FINAL, 'cache', 'crossref_affiliations.json')
+    cr_path = os.path.join(CACHE_DIR, 'crossref_affiliations.json')
     crossref = json.load(open(cr_path, encoding='utf-8')) if os.path.exists(cr_path) else {}
-    cache_path = os.path.join(FINAL, 'cache', 'openalex_openalex_id.json')
+    cache_path = os.path.join(CACHE_DIR, 'openalex_openalex_id.json')
     cache = json.load(open(cache_path, encoding='utf-8')) if os.path.exists(cache_path) else {}
 
     # 來源 1：本人論文上寫的機構
@@ -2510,7 +2571,7 @@ def stage6_external():
           {'name_en': 22, 'identity_status': 22, '缺的原因': 34},
           note='連機構都查不到的外部共同作者，依「連到幾位名冊教師」排序。'
                '待查清單（附代表作與現成的搜尋字串）在 '
-               'manual_review/decisions/web_lookup_queue.csv。')
+               'raw_data/generated/web_lookup_queue.csv。')
 
     print('外部共同作者 %d 人，機構來源分布：' % len(ext))
     for k, v in n_src.most_common():
@@ -2520,13 +2581,13 @@ def stage6_external():
     print('國別前十：', collections.Counter(r['affil_country'] for r in got if r['affil_country']).most_common(10))
 
     # 待查清單要在這裡才產得對——階段 4 跑的時候還不知道誰真的缺機構
-    emit_web_queue(ext, rd('final_plan', 'paper', 'papers_all.csv'), set())
+    emit_web_queue(ext, rd('final_plan', 'input', 'paper', 'papers_all.csv'), set())
 
 
 # ═══════════════════════════════════════════════════════════════
 # 階段 7：人工查核工作表
 # ═══════════════════════════════════════════════════════════════
-SHEETS_OUT = os.path.join(FINAL, 'manual_review')
+SHEETS_OUT = os.path.join(OUTPUT, 'manual_review')
 
 
 
@@ -2562,7 +2623,7 @@ def sheet(name, title, note, fields, rows, widths=None):
 
 def s1():
     _, act, ext = read_master()
-    ina = rd('final_plan', 'professor_demo', 'professors_inactive.csv')
+    ina = rd('final_plan', 'input', 'professor_demo', 'professors_inactive.csv')
     rows = []
     for r in act + ina:
         if r['oa_needs_review'] == '1':
@@ -2615,7 +2676,7 @@ def s2():
 
 # ── 3. 同標題的論文群組 ────────────────────────────────────────
 def s3():
-    p = rd('final_plan', 'paper', 'papers_all.csv')
+    p = rd('final_plan', 'input', 'paper', 'papers_all.csv')
     g = collections.defaultdict(list)
     for r in p:
         k = norm_title(r['title'])
@@ -2677,7 +2738,7 @@ def s5():
 
 # ── 6. 未建邊的論文 ────────────────────────────────────────────
 def s6():
-    p = [r for r in rd('final_plan', 'paper', 'papers_all.csv') if r['edge_eligible'] == '0']
+    p = [r for r in rd('final_plan', 'input', 'paper', 'papers_all.csv') if r['edge_eligible'] == '0']
     rows = []
     for r in sorted(p, key=lambda r: (-int(r['n_roster_authors']), -int(r['n_authors']))):
         rows.append({
@@ -2701,7 +2762,7 @@ def s6():
 def s7():
     """自動來源都走不通的外部作者，逐人查機構。"""
     _, _, ext = read_master()
-    papers = rd('final_plan', 'paper', 'papers_all.csv')
+    papers = rd('final_plan', 'input', 'paper', 'papers_all.csv')
     bynode = collections.defaultdict(list)
     for r in papers:
         for i in json.loads(r['author_node_ids_json']):
@@ -2746,8 +2807,8 @@ def stage7_sheets():
     print('產生人工查核工作表 →', SHEETS_OUT)
     for f in (s1, s2, s3, s4, s5, s6, s7):
         f()
-    os.makedirs(os.path.join(SHEETS_OUT, 'decisions'), exist_ok=True)
-    print('填完的檔案請放到 manual_review/decisions/')
+    os.makedirs(DEC_DIR, exist_ok=True)
+    print('填完的檔案請放到 decisions/')
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -2790,7 +2851,11 @@ INST_ALIAS = {
     'instituteofeconomicsacademiasinica': '中央研究院經濟研究所',
     'academiasinica': '中央研究院經濟研究所',
     'researchcenterforhumanitiesandsocialsciences': '中央研究院人文社會科學研究中心',
+    'researchcenterforhumanitiesandsocialsciencesacademiasinica': '中央研究院人文社會科學研究中心',
 }
+# 同名不同國的名冊機構：Soochow University 有臺北的東吳與蘇州大學。
+# 資料記錄的國別不是 TW 時，不併入名冊機構，改依國別定位（見 build_map_positions）。
+AMBIGUOUS_ROSTER_NAMES = {'soochowuniversity'}
 
 
 def _norm_inst(s):
@@ -2830,7 +2895,7 @@ def _pack(cx, cy, n, r0, dr=0.055, per=8):
 
 def load_geojson_counties(max_pts=1200):
     """讀縣市界，順便抽稀（原檔 8MB，畫圖用不到那個精度）。"""
-    path = os.path.join(ROOT, 'faculty_and_map', 'output', 'basemap', 'tw_county.geojson')
+    path = os.path.join(BASEMAP_DIR, 'tw_county.geojson')
     if not os.path.exists(path):
         return []
     gj = json.load(open(path, encoding='utf-8'))
@@ -2850,8 +2915,8 @@ def load_geojson_counties(max_pts=1200):
 
 def build_map_positions(show_external, show_unknown):
     """算出每個節點要畫在哪裡，回傳 (pos, meta, clusters)。"""
-    insts = rd('final_plan', 'map', 'institutions.csv')
-    geo = {r['teacher_id']: r for r in rd('final_plan', 'map', 'professor_geo.csv')}
+    insts = rd('final_plan', 'input', 'map', 'institutions.csv')
+    geo = {r['teacher_id']: r for r in rd('final_plan', 'input', 'map', 'professor_geo.csv')}
     all_rows, roster, ext = read_master()
 
     inst_by_key, inst_by_code = {}, {}
@@ -2903,6 +2968,8 @@ def build_map_positions(show_external, show_unknown):
         a = r.get('affil_institution_norm') or ''
         k = _norm_inst(a)
         hit = inst_by_key.get(k) or inst_by_key.get(_norm_inst(INST_ALIAS.get(k, '')))
+        if hit and k in AMBIGUOUS_ROSTER_NAMES and (r.get('affil_country') or 'TW') != 'TW':
+            hit = None
         if hit:
             at_inst[hit['institution_code']].append(r)
         elif a:
@@ -2997,7 +3064,7 @@ def stage8_map(layer='pub', show_external=False, show_unknown=False,
     layers = ['pub', 'proj'] if layer == 'both' else [layer]
     edges = []
     for lay in layers:
-        for e in rd('final_plan', 'network', files[lay]):
+        for e in rd('final_plan', 'input', 'network', files[lay]):
             y = int(e['year'])
             if not (year_from <= y <= year_to):
                 continue
@@ -3066,7 +3133,7 @@ def stage8_map(layer='pub', show_external=False, show_unknown=False,
                                   .withStroke(linewidth=2.2, foreground='white')])
     import matplotlib.patheffects as pe
     thr = 6 if show_external else 4
-    for r in rd('final_plan', 'map', 'institutions.csv'):
+    for r in rd('final_plan', 'input', 'map', 'institutions.csv'):
         if r['lat'] and int(r['n_active']) >= thr:
             ax.annotate(r['institution_name'].replace('國立', '').replace('學校財團法人', ''),
                         (float(r['lon']), float(r['lat'])),
@@ -3113,7 +3180,7 @@ def stage8_map(layer='pub', show_external=False, show_unknown=False,
             '海外與非名冊機構沒有座標，依地區分群，方位依該國相對台灣的方位角，距離是示意的。',
             transform=ax.transAxes, ha='center', va='top', fontsize=8.2, color='#666')
 
-    outdir = os.path.join(FINAL, 'figures')
+    outdir = HTML_OUT
     os.makedirs(outdir, exist_ok=True)
     if not outfile:
         outfile = os.path.join(outdir, 'map_%s%s%s_%d_%d.png' % (
@@ -3134,7 +3201,7 @@ def stage8_map(layer='pub', show_external=False, show_unknown=False,
 # 台灣與海外用同一個以台灣為中心的方位等距投影：台灣保持本地比例與中央位置，
 # 非名冊機構（含海外）畫在機構座標上；找不到機構或位置的作者暫放北極。
 WORLD_GEOJSON = 'ne_50m_admin_0_countries.geojson'     # Natural Earth 1:50m 國界
-INST_GEO_CACHE = os.path.join(FINAL, 'cache', 'institution_geo.json')
+INST_GEO_CACHE = os.path.join(CACHE_DIR, 'institution_geo.json')
 INST_GEO_DECISIONS = os.path.join(DEC_DIR, 'external_institution_geo.csv')
 WIKIDATA_SPARQL = 'https://query.wikidata.org/sparql'
 GEO_MAX_KM = 80          # Wikidata 座標離 OpenAlex 城市座標超過這個距離就不採用
@@ -3207,9 +3274,9 @@ def _rdp(pts, eps):
 def load_counties(eps=0.0018, min_pts=6):
     """縣市界，一縣一組 SVG path。地圖底圖固定用 `faculty_and_map/output/basemap/`
     那一份（與原本的 map_explorer 同源），簡化方式也照它的 RDP。"""
-    path = os.path.join(ROOT, 'faculty_and_map', 'output', 'basemap', 'tw_county.geojson')
+    path = os.path.join(BASEMAP_DIR, 'tw_county.geojson')
     if not os.path.exists(path):
-        path = os.path.join(FINAL, 'basemap copy', 'tw_county.geojson')
+        path = os.path.join(BASEMAP_DIR, 'tw_county.geojson')
     if not os.path.exists(path):
         raise FileNotFoundError('找不到 tw_county.geojson；無法產生台灣底圖')
     gj = json.load(open(path, encoding='utf-8'))
@@ -3261,9 +3328,9 @@ def load_world():
     投影後才簡化，離台灣越遠抽得越稀、太小的島直接略過，檔案才不會變大。
     包住台灣對蹠點的國家（巴拉圭）投影後外環會沿著圓盤邊緣走，
     所以補一圈圓盤外框，用 even-odd 填色畫成環狀。"""
-    path = os.path.join(ROOT, 'faculty_and_map', 'output', 'basemap', WORLD_GEOJSON)
+    path = os.path.join(BASEMAP_DIR, WORLD_GEOJSON)
     if not os.path.exists(path):
-        path = os.path.join(FINAL, 'basemap copy', WORLD_GEOJSON)
+        path = os.path.join(BASEMAP_DIR, WORLD_GEOJSON)
     if not os.path.exists(path):
         print(f'  ⚠ 找不到 {WORLD_GEOJSON}；地圖只畫台灣')
         return []
@@ -3304,9 +3371,9 @@ def load_world():
 def _county_of(points):
     """(lat, lon) 清單 → 縣市名；不在任何縣市界內的回傳 ''。用原始縣市界判斷點在多邊形內，
     要扣掉洞：新北市的外框包住臺北市，只看外框會把臺北市的點判成新北市。"""
-    path = os.path.join(ROOT, 'faculty_and_map', 'output', 'basemap', 'tw_county.geojson')
+    path = os.path.join(BASEMAP_DIR, 'tw_county.geojson')
     if not os.path.exists(path):
-        path = os.path.join(FINAL, 'basemap copy', 'tw_county.geojson')
+        path = os.path.join(BASEMAP_DIR, 'tw_county.geojson')
     if not points or not os.path.exists(path):
         return [''] * len(points)
     polys = []
@@ -3367,8 +3434,9 @@ def external_institution_places(ext, roster_code):
     place 是 {'key','label','cc','city','lat','lon','src'}，或 {'roster': 名冊機構代碼}。
 
     機構名稱先換成 OpenAlex institution：
-      1. `manual_review/decisions/external_institution_geo.csv` 的人工裁定
-         （roster:名冊代碼／ror:ROR ID／wd:Wikidata QID／none）
+      1. `decisions/external_institution_geo.csv` 的人工裁定
+         （roster:名冊代碼／ror:ROR ID／wd:Wikidata QID／ll:緯度,經度（人工確認的地址座標）／none）
+         `org_type` 欄填 third 表示「第三機構」（企業、金融、醫療等非學術單位），會帶進 place['org']
       2. 這位作者在 OpenAlex 快取中的歷年機構，名稱完全相同
       3. 所有快取作者的機構名稱：同名同國取最常出現的機構；不看國別時必須唯一
     座標優先 Wikidata P625（機構本身）；沒有、或離 OpenAlex 城市座標超過 GEO_MAX_KM
@@ -3407,7 +3475,7 @@ def external_institution_places(ext, roster_code):
             continue
         if name in decisions:
             kind, _, val = (decisions[name].get('decision') or '').partition(':')
-            if kind in ('roster', 'ror', 'wd') and val:
+            if kind in ('roster', 'ror', 'wd', 'll') and val:
                 want[r['node_id']] = (kind, val)
             continue                                   # none：人工確認找不到
         # 候選 id 依序：作者自己的機構、同名同國（依出現次數）、不看國別但唯一的。
@@ -3455,6 +3523,12 @@ def external_institution_places(ext, roster_code):
         place = None
         if kind == 'roster':
             place = {'roster': val}
+        elif kind == 'll':
+            dec = decisions[name]
+            lat, lon = (float(x) for x in val.split(','))
+            place = {'key': 'll:' + (dec.get('label') or name), 'label': dec.get('label') or name,
+                     'cc': dec.get('country') or '', 'city': dec.get('city') or '', 'lat': lat, 'lon': lon,
+                     'src': 'manual'}
         elif kind == 'wd' and wd.get(val):
             dec = decisions[name]
             place = {'key': val, 'label': dec.get('label') or name, 'cc': dec.get('country') or '',
@@ -3476,11 +3550,15 @@ def external_institution_places(ext, roster_code):
                              'cc': rec.get('country_code') or g.get('country_code') or '',
                              'city': g.get('city') or '', 'lat': ll[0], 'lon': ll[1], 'src': src}
         if place:
+            if name in decisions and decisions[name].get('org_type'):
+                place['org'] = decisions[name]['org_type']
             places[nid] = place
         elif name:
             unplaced[name] += 1
 
     src = collections.Counter('roster' if 'roster' in p else p['src'] for p in places.values())
+    if src['manual']:
+        print(f'  人工確認地址座標：{src["manual"]} 位')
     named = sum(1 for r in ext if sp(r.get('affil_institution_norm')))
     print(f'  非名冊機構定位：{len(places)}/{named} 位（Wikidata 機構座標 {src["wikidata"]}、'
           f'OpenAlex 城市座標 {src["openalex"]}、併入名冊機構 {src["roster"]}）；'
@@ -3490,28 +3568,202 @@ def external_institution_places(ext, roster_code):
     return places
 
 
+# ── 外部作者的系所：從署名字串拆出來（資料裡沒有系所欄位）
+OA_RAW_AFFIL_CACHE = os.path.join(CACHE_DIR, 'openalex_raw_affiliations.json')
+OA_WORKS_DIR = os.path.join(UPSTREAM, 'claude_openalex_match', 'raw', 'works_by_author')
+_UNIT_EN = re.compile(r'(?i)^(department|dept\b|dept\.|graduate institute|institute|school|college|faculty|division|'
+                      r'program(me)?|research cent(er|re)|cent(er|re)|laboratory|unit)\b')
+_UNIT_ZH = re.compile(r'([一-鿿]{2,}?(?:學位學程|學系|研究所|學程|學院|中心|系|所))')
+_UNIT_RANK = [r'(?i)^(department|dept)', r'(?i)^graduate institute', r'(?i)^institute', r'(?i)^research cent',
+              r'(?i)^(school|college|faculty)', r'.']
+_PLACE_TAIL = re.compile(r'(?i)(\s+(new taipei|taipei|taichung|tainan|kaohsiung|hsinchu|taoyuan|keelung|chiayi|hualien|'
+                         r'city|taiwan|r\.?o\.?c\.?|republic of china))+\s*$')     # 只刪結尾的地名
+# 外部作者的英文系所 → 同一間名冊機構的名冊系所（中文）。只有該機構名冊真的有這個系所時才對應，
+# 讓校內網路裡同系的外部作者跟名冊教師同色；對不到的保留原文。
+DEPT_EN_ZH = [
+    (r'(department|dept\.?) of economics', ('經濟學系',)),
+    (r'(graduate )?institute of economics', ('經濟學研究所', '中央研究院經濟研究所', '經濟學系')),
+    (r'(department|dept\.?) of agricultural economics', ('農業經濟學系',)),
+    (r'(department|dept\.?|graduate institute|institute) of applied economics( and management)?',
+     ('應用經濟學系', '應用經濟與管理學系', '應用經濟研究所')),
+    (r'(graduate institute|institute|department) of industrial economics', ('產業經濟研究所',)),
+    (r'(department|dept\.?|institute) of political economy', ('政治經濟學系',)),
+    (r'(department|dept\.?) of global political economy', ('全球政治經濟學系',)),
+    (r'(department|dept\.?) of cooperative economics', ('合作經濟暨社會事業經營學系',)),
+    (r'research cent(er|re) for humanities and social sciences', ('中央研究院人文社會科學研究中心',)),
+]
+
+
+def _raw_affil_index(author_ids):
+    """作者 OpenAlex id → [[年份, [署名原文], [OpenAlex 機構名]], ...]。
+    來源是上游 claude_openalex_match 抓過的著作（只讀）；只留需要的作者，存成小快取。"""
+    want = {a for a in author_ids if a}
+    cache = json.load(open(OA_RAW_AFFIL_CACHE, encoding='utf-8')) if os.path.exists(OA_RAW_AFFIL_CACHE) else {}
+    if want <= set(cache) or not os.path.isdir(OA_WORKS_DIR):
+        return cache
+    import glob
+    idx = {a: [] for a in want}
+    for fn in sorted(glob.glob(os.path.join(OA_WORKS_DIR, '*.json'))):
+        for w in json.load(open(fn, encoding='utf-8')).get('works') or []:
+            for au in w.get('authorships') or []:
+                aid = ((au.get('author') or {}).get('id') or '').rsplit('/', 1)[-1]
+                if aid in idx and au.get('raw_affiliation_strings'):
+                    idx[aid].append([w.get('publication_year'), au['raw_affiliation_strings'],
+                                     [i.get('display_name') or '' for i in au.get('institutions') or []]])
+    with open(OA_RAW_AFFIL_CACHE, 'w', encoding='utf-8') as f:
+        json.dump(idx, f, ensure_ascii=False)
+    return idx
+
+
+_OTHER_ORG = re.compile(r'(?i)universit|government|hospital|academia|corporation|company|bank|ministry|council')
+
+
+def _unit_of(s, names=()):
+    """署名字串 → 系所名稱；拆不出來回傳 None。
+    names（已 _norm_inst 的機構名）有給時，只看「這個機構名稱前面、上一個機構之後」的那幾段，
+    免得「Department of Education, Taipei City Government, Department of Economics, Soochow University」拿到市政府的單位。"""
+    if re.search(r'[一-鿿]', s):
+        rest = re.split(r'大學|研究院', s)[-1]         # 「國立政治大學財政學系」→「財政學系」
+        m = _UNIT_ZH.findall(rest)
+        if not m or (rest == s and m[-1] == s and s.endswith('學院')):   # 「致理技術學院」是機構本身
+            return None
+        return m[-1]
+    parts = [p.strip() for p in re.split(r'[,;]', s) if p.strip()]
+    is_unit = lambda p: _UNIT_EN.search(p) and not re.search(r'(?i)universit', p)  # noqa: E731
+    is_org = lambda p: _OTHER_ORG.search(p) and not is_unit(p)                     # noqa: E731
+    at = next((i for i, p in enumerate(parts) if names and _same_inst(p, names)), None)
+    if at is not None:
+        start = max([i for i in range(at) if is_org(parts[i])] + [-1])
+        before = parts[start + 1:at]
+        after = parts[at + 1:]
+        after = after[:next((i for i, p in enumerate(after) if is_org(p)), len(after))]
+        if any(is_unit(p) for p in before):
+            parts = before
+        elif any(is_unit(p) for p in after):           # 「National Taiwan University, Department of Economics」
+            parts = after
+        else:                                          # 署名本身就是單位，例如人社中心
+            parts = parts[at:at + 1]
+    # 沒有逗號的署名：「Department of Life Science National Taiwan University Taipei」→ 切在機構名稱前
+    def cut(p):
+        if not (_UNIT_EN.search(p) and re.search(r'(?i)universit|academia', p)):
+            return p
+        q = re.sub(r'(?i)(\s+(of|and|at|&))+\s*$', '', re.split(r'\s+(?=National |Academia |[A-Z][a-z]+ University)', p)[0])
+        return q if len(q.split()) >= 3 and not re.search(r'(?i)universit', q) else p
+    parts = [cut(p) for p in parts]
+    units = [p for p in parts if is_unit(p)]
+    for pat in _UNIT_RANK:
+        u = [p for p in units if re.search(pat, p)]
+        if u:
+            u = re.sub(r'(?i)\s+academia sinica.*$|\s+\d.*$', '', u[0])     # 去掉機構名、郵遞區號以後的地址
+            u = re.sub(r'(?i)(\s+(of|and|at|&))+\s*$', '', _PLACE_TAIL.sub('', u).strip(' .'))
+            return u if len(u) > 6 else None
+    return None
+
+
+def _same_inst(s, names, exact=False):
+    """署名字串是否屬於這個機構。exact=True 用在 OpenAlex 的機構名稱（要完全相同）。
+    子字串比對時排除「名稱後面接 of／hospital」，免得 National Taiwan University 對到臺科大或臺大醫院。"""
+    k = _norm_inst(s)
+    if exact:
+        return k in names
+    for n in names:
+        i = k.find(n)
+        if i >= 0 and not k[i + len(n):].startswith(('of', 'hospital')):
+            return True
+    return False
+
+
+def external_departments(ext_rows, inst_names_of, roster_depts_of):
+    """外部作者 → {'unit': 系所原文, 'dept': 對應的名冊系所或 '', 'src': 來源說明, 'raw': 署名原文, 'alt': [其他系所]}。
+
+    只用跟目前機構相符的署名（不推論）：
+      1. 人工查證或期刊 PDF 寫的機構（affil_source = manual_verified / journal_pdf）裡的系所
+      2. OpenAlex 著作的署名原文，機構相符者取出現最多的系所（同數取較新年份）
+      3. 其他來源寫在 affil_primary／affil_all_json 的署名
+    inst_names_of(row) 回傳這位作者目前機構的各種寫法（已 _norm_inst）。"""
+    idx = _raw_affil_index({(r.get('openalex_author_id') or '').rsplit('/', 1)[-1] for r in ext_rows})
+    out = {}
+    for r in ext_rows:
+        names = inst_names_of(r)
+        if not names:
+            continue
+        found = None
+        src = r.get('affil_source') or ''
+        if src in ('manual_verified', 'journal_pdf'):
+            u = _unit_of(r.get('affil_primary') or '')
+            if u:
+                found = (u, {'manual_verified': '人工查證', 'journal_pdf': '期刊論文首頁'}[src], r['affil_primary'], [])
+        if not found:
+            cnt, last, raw = collections.Counter(), {}, {}
+            aid = (r.get('openalex_author_id') or '').rsplit('/', 1)[-1]
+            for y, strings, insts in idx.get(aid, []):
+                # 署名原文寫了機構名就直接比；只有一段署名時，才用 OpenAlex 對到的機構名稱判斷
+                only = len(strings) == 1 and any(_same_inst(i, names, exact=True) for i in insts)
+                for s in strings:
+                    if only or _same_inst(s, names):
+                        u = _unit_of(s, names)
+                        if u:
+                            cnt[u] += 1
+                            if (y or 0) >= last.get(u, 0):
+                                last[u], raw[u] = y or 0, s
+            if cnt:
+                best = sorted(cnt, key=lambda u: (-cnt[u], -last[u]))
+                u = best[0]
+                found = (u, f'OpenAlex 署名（{cnt[u]} 篇，最近 {last[u]}）' if last[u] else 'OpenAlex 署名',
+                         raw[u], best[1:4])
+        if not found:
+            for s in [r.get('affil_primary') or ''] + json.loads(r.get('affil_all_json') or '[]'):
+                if s and (s == r.get('affil_primary') or _same_inst(s, names)):
+                    u = _unit_of(s, names)
+                    if u:
+                        found = (u, '論文署名', s, [])
+                        break
+        if not found:
+            continue
+        unit, label, raw, alt = found
+        dept = ''
+        have = roster_depts_of(r)
+        if re.search(r'[一-鿿]', unit):
+            dept = next((h for h in have if unit == h or unit in h), '')
+        else:
+            for pat, zh in DEPT_EN_ZH:
+                if re.fullmatch(pat, unit.lower()):
+                    dept = next((z for z in zh if z in have), '')
+                    break
+        out[r['node_id']] = {'unit': unit, 'dept': dept, 'src': label, 'raw': raw, 'alt': alt}
+    return out
+
+
+def read_external_places():
+    """input/map/external_places.csv → {node_id: place}（與 external_institution_places 的格式相同）。"""
+    places = {}
+    for r in rd('final_plan', 'input', 'map', 'external_places.csv'):
+        if r['place_type'] == 'roster':
+            places[r['node_id']] = {'roster': r['institution_code']}
+        else:
+            places[r['node_id']] = {'key': r['place_key'], 'label': r['label'], 'cc': r['country'], 'city': r['city'],
+                                    'lat': float(r['lat']), 'lon': float(r['lon']), 'src': r['src'],
+                                    'org': r['org_type']}
+    return places
+
+
+def read_external_departments():
+    return {r['node_id']: {'unit': r['unit'], 'dept': r['dept'], 'src': r['src'], 'raw': r['raw'],
+                           'alt': json.loads(r['alt_json'] or '[]')}
+            for r in rd('final_plan', 'input', 'professor_demo', 'external_departments.csv')}
+
+
 def build_html_payload():
     """算出 HTML 要用的全部東西：世界底圖、縣市、機構、節點、外部機構群組、邊、論文、計畫。"""
     pos, meta, _ = build_map_positions(show_external=True, show_unknown=True)
     _, roster, ext = read_master()
     info = {r['node_id']: r for r in roster + ext}
-    geo = {r['teacher_id']: r for r in rd('final_plan', 'map', 'professor_geo.csv')}
-    inst_rows = rd('final_plan', 'map', 'institutions.csv')
-    code_by_key, inst_ll = {}, {}
-    for r in inst_rows:
-        for nm in (r['institution_name'], r['institution_en']):
-            if nm:
-                code_by_key[_norm_inst(nm)] = r['institution_code']
-        if r['lat'] and r['lon']:
-            inst_ll[r['institution_code']] = (float(r['lat']), float(r['lon']))
+    geo = {r['teacher_id']: r for r in rd('final_plan', 'input', 'map', 'professor_geo.csv')}
+    inst_rows = rd('final_plan', 'input', 'map', 'institutions.csv')
+    inst_ll = {r['institution_code']: (float(r['lat']), float(r['lon'])) for r in inst_rows if r['lat'] and r['lon']}
 
-    def roster_code(name):
-        k = _norm_inst(name)
-        return code_by_key.get(_norm_inst(INST_ALIAS[k])) if k in INST_ALIAS else code_by_key.get(k)
-
-    # ── 外部作者：非名冊機構畫在機構座標；找不到機構或位置的暫放北極
-    places = external_institution_places(
-        [info[n] for n, m in meta.items() if m['kind'] == 'ext_region'], roster_code)
+    # ── 外部作者：位置讀 input/map/external_places.csv（第 8 階段產生）；找不到位置的暫放北極
+    places = read_external_places()
     groups, place_of, to_roster = collections.defaultdict(list), {}, {}
     for nid, m in meta.items():
         if m['kind'] == 'ext_unknown':
@@ -3540,7 +3792,7 @@ def build_html_payload():
             p = place_of[key]
             x, y, _ = _aeqd(p['lat'], p['lon'])
             b.update(label=p['label'], pole=0, unknown=0, cc=p['cc'], city=p['city'],
-                     src=p['src'], km=_km_from_tw(p['lat'], p['lon']),
+                     src=p['src'], org=p.get('org', ''), km=_km_from_tw(p['lat'], p['lon']),
                      x=round(x, 4), y=round(y, 4))
         for i in ids:
             in_bubble[i] = len(bubbles)
@@ -3554,7 +3806,7 @@ def build_html_payload():
         b.setdefault('cty', '')
 
     # ── 論文與計畫（給個人檔案與「這條邊合作了哪幾篇」用）
-    papers = rd('final_plan', 'paper', 'papers_all.csv')
+    papers = rd('final_plan', 'input', 'paper', 'papers_all.csv')
     pidx, plist = {}, []
     node_papers = collections.defaultdict(list)
     for p in papers:
@@ -3568,11 +3820,18 @@ def build_html_payload():
             node_papers[i].append(pidx[p['paper_id']])
 
     jlist, node_projs = [], collections.defaultdict(list)
-    for pj in rd('final_plan', 'project', 'projects_all.csv'):
+    for pj in rd('final_plan', 'input', 'project', 'projects_all.csv'):
         k = len(jlist)
         jlist.append([pj['project_title'][:160], int(pj['year']), pj['grant_category'][:24]])
         for t in json.loads(pj['member_teacher_ids_json']):
             node_projs[t].append(k)
+
+    # ── 名冊補充屬性（roster_attributes.py 產生；檔案不存在就留空）
+    def roster_attr(name):
+        if not os.path.exists(os.path.join(INPUT, 'professor_demo', name)):
+            return {}
+        return {r['teacher_id']: r for r in rd('final_plan', 'input', 'professor_demo', name)}
+    gender, phd = roster_attr('roster_gender.csv'), roster_attr('roster_phd.csv')
 
     # ── 節點
     nodes = []
@@ -3607,26 +3866,58 @@ def build_html_payload():
             'ns': r.get('nstc_url', ''), 'cv': r.get('cv_url', ''),
             'oa': r.get('openalex_author_id', ''),
             'oaconf': r.get('oa_match_confidence', ''),
+            'g': gender.get(nid, {}).get('gender', ''),
+            'gs': gender.get(nid, {}).get('gender_source', ''),
+            'ph': [phd[nid].get(k, '') for k in
+                   ('phd_school', 'phd_country', 'phd_field', 'phd_year', 'phd_confidence', 'phd_evidence_url')]
+                  if nid in phd else None,
         })
     idx = {n['id']: i for i, n in enumerate(nodes)}
 
     # 外部作者掛在名冊機構時，補上機構代碼，讓「機構→人」清單也看得到他
     code_by_name = {r['institution_name']: r['institution_code']
-                    for r in rd('final_plan', 'map', 'institutions.csv')}
+                    for r in rd('final_plan', 'input', 'map', 'institutions.csv')}
     cty_by_code = {r['institution_code']: _county_key(r['county'])
-                   for r in rd('final_plan', 'map', 'institutions.csv')}
+                   for r in rd('final_plan', 'input', 'map', 'institutions.csv')}
     for n in nodes:
         if n['k'] == 1 and not n['ic']:
             n['ic'] = code_by_name.get(n['inst'], '')
         if n['k'] == 1 and not n['cty']:
             n['cty'] = cty_by_code.get(n['ic'], '')
 
+    # 外部作者掛到名冊機構時，顯示的機構名稱統一用名冊機構名（署名原文另外保留在 xr）
+    inst_name_of = {r['institution_code']: r['institution_name'] for r in inst_rows}
+    for n in nodes:
+        if n['k'] == 1 and n['ic'] in inst_name_of:
+            n['inst'] = inst_name_of[n['ic']]
+
+    # 外部作者的系所：讀 input/professor_demo/external_departments.csv（第 8 階段產生）
+    node_of = {n['id']: n for n in nodes}
+    depts = read_external_departments()
+    src_label = {'manual_verified': '人工確認', 'journal_pdf': '期刊論文首頁', 'matched_works': 'OpenAlex 著作署名',
+                 'openalex_last': 'OpenAlex 最後已知機構', 'crossref_paper': 'Crossref 論文資料',
+                 'prior_evidence': '先前查證紀錄'}
+    for n in nodes:
+        if n['k'] == 1:
+            r = info[n['id']]
+            if r.get('affil_primary'):
+                n.update(ar=r['affil_primary'][:200], src=src_label.get(r.get('affil_source'), r.get('affil_source', '')))
+    for nid, x in depts.items():
+        n = node_of.get(nid)
+        if n is None:
+            continue
+        n['dept'] = x['dept']
+        n.update(xu=x['unit'], xs=x['src'], xr=x['raw'][:200], xa=x['alt'])
+    k_ext = [n for n in nodes if n['k'] == 1]
+    print(f'  外部作者系所：{len(depts)}/{len(k_ext)} 位拆得出系所，'
+          f'其中 {sum(1 for x in depts.values() if x["dept"])} 位對到同校名冊系所')
+
     def slot(nid):
         return idx.get(nid)
 
     edges = []
     for lay, fn in ((0, 'paper_network_edges.csv'), (1, 'project_network_edges.csv')):
-        for e in rd('final_plan', 'network', fn):
+        for e in rd('final_plan', 'input', 'network', fn):
             a, b = slot(e['source_node_id']), slot(e['target_node_id'])
             if a is None or b is None or a == b:
                 continue
@@ -3707,6 +3998,7 @@ path.world{fill:#f3f4f5;stroke:#c9ced4;stroke-width:.5px;vector-effect:non-scali
 .bub{fill:#6c727a;fill-opacity:.5;stroke:#4f555c;stroke-width:.8px;vector-effect:non-scaling-stroke;cursor:pointer}
 .bub.pole{fill:#c5c9ce;fill-opacity:.45;stroke:#8f959b;stroke-dasharray:3 3}
 .bub.unk{fill:#d5d8dc;stroke:#b0b4b9}
+.bub.third{fill:#e8892b;fill-opacity:.85;stroke:#8a4a0e;stroke-width:1.1px}
 .bub:hover,.nd:hover{stroke:#111;stroke-width:1.8px}
 text{pointer-events:none;font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif}
 text.instlb{font-weight:600;fill:#12314f;paint-order:stroke;stroke:#fff;stroke-linejoin:round}
@@ -3832,7 +4124,7 @@ function worldView(){if($("#view").value==="net"){$("#view").value="map";build()
 const CROWDED={"臺北市":new Set(["0003","AS01","0001"]),"新北市":new Set(["0017"])};
 const LATE=new Set(["0031","1050","0012","1016"]), FOLD_SPAN=1.5;
 const zoomedIn=()=>Math.min(VB.w,VB.h)<=FOLD_SPAN;
-function folded(g){if(zoomedIn()||SEL.county===g.cty)return false;
+function folded(g){if(zoomedIn()||SEL.county===g.cty||g.org==="third")return false;
   const code=g.type==="I"?g.k.slice(1):null, keep=CROWDED[g.cty];
   return LATE.has(code)||(!!keep&&!keep.has(code))}
 // 全台視野的 bubble 畫小一點；點進縣市或放大後恢復原本大小（仍保留最小可點擊尺寸）。
@@ -3968,7 +4260,7 @@ function buildGroups(){
   GRP=new Map();
   const add=(k,i)=>{ let g=GRP.get(k);
     if(!g){ const o=P(i); g={k,members:[],type:k[0],x:0,y:0,n:0};
-      if(k[0]==="B"){const b=BUB[+k.slice(1)];g.x=b.x;g.y=b.y;g.label=b.label;g.unknown=b.unknown;g.km=b.km;g.pole=b.pole;g.country=b.country;g.cty=b.cty}
+      if(k[0]==="B"){const b=BUB[+k.slice(1)];g.x=b.x;g.y=b.y;g.label=b.label;g.unknown=b.unknown;g.km=b.km;g.pole=b.pole;g.country=b.country;g.cty=b.cty;g.org=b.org}
       else if(k[0]==="I"){const t=D.insts.find(t=>t.c===k.slice(1))||o;g.x=t.x;g.y=t.y;g.label=t.n;g.inst=t;g.cty=t.cty}
       else {const t=D.insts.find(t=>t.c===o.ic)||(o.bi!=null?BUB[o.bi]:o);g.x=t.x;g.y=t.y;g.label=o.name;g.node=i;g.cty=o.cty}
       GRP.set(k,g)}
@@ -4000,14 +4292,15 @@ function renderMap(){
     const far=[p,q].some(g=>g.type==="B"&&(g.pole||g.km>600));
     const col=e.l?"#d1583a":"#3b6ea5",op=far?(e.l?.3:.1):(e.l?.5:.24),lw=Math.min(3.5,.4+.5*Math.sqrt(e.c));
     return `<line class="edge" data-e="${i}" data-w="${lw}" data-op="${op}" x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" stroke="${col}" stroke-opacity="${op}"/>`}).join("");
-  const gs=[...GRP.values()].sort((a,b)=>(b.rp||0)-(a.rp||0));
+  // 第三機構畫在最上層（台北的會疊在臺大等機構圓上面），其餘大的先畫
+  const gs=[...GRP.values()].sort((a,b)=>((a.org==="third")-(b.org==="third"))||(b.rp||0)-(a.rp||0));
   $("#gnode").innerHTML=gs.map(g=>{
-    if(g.type==="B")return `<circle class="bub${g.pole?" pole":""}${g.unknown?" unk":""}" data-k="${g.k}" cx="${g.x}" cy="${g.y}"><title>${g.pole?"暫放北極：":""}${esc(g.label)}${g.country?"（"+esc(g.country)+"）":""}：${g.n} 位共同作者</title></circle>`;
+    if(g.type==="B")return `<circle class="bub${g.pole?" pole":""}${g.unknown?" unk":""}${g.org==="third"?" third":""}" data-k="${g.k}" cx="${g.x}" cy="${g.y}"><title>${g.pole?"暫放北極：":""}${g.org==="third"?"第三機構：":""}${esc(g.label)}${g.country?"（"+esc(g.country)+"）":""}：${g.n} 位共同作者</title></circle>`;
     if(g.type==="I"){const dim=SEL.county&&g.inst&&g.inst.cty!==SEL.county;
       return `<circle class="inst${SEL.inst===g.k.slice(1)?" sel":""}${dim?" dimc":""}" data-k="${g.k}" cx="${g.x}" cy="${g.y}"><title>${esc(g.label)}：${g.n} 位</title></circle>`}
     if(false)return `<circle data-k="${g.k}" cx="${g.x}" cy="${g.y}" r="${g.r}"><title>${esc(g.label)}：${g.n} 位</title></circle>`;
     const n=NODES[g.node];
-    return `<circle class="nd${n.k?" ext":""}${SEL.node===g.node?" sel":""}" data-k="${g.k}" cx="${g.x}" cy="${g.y}"${n.k?"":` fill="${dcol[n.dept]||"#888"}"`}><title>${esc(n.name)}${n.k?"（非名冊）":""}　${esc(n.inst)}${n.dept?" · "+esc(n.dept):""}</title></circle>`}).join("");
+    return `<circle class="nd${n.k?" ext":""}${SEL.node===g.node?" sel":""}" data-k="${g.k}" cx="${g.x}" cy="${g.y}"${n.k?"":` fill="${dcol[n.dept]||"#888"}"`}><title>${esc(n.name)}${n.k?"（非名冊）":""}　${esc(n.inst)}${(n.xu||n.dept)?" · "+esc(n.xu||n.dept):""}</title></circle>`}).join("");
   rescale(); applyFold(true); relabel();
   $("#gnode").onpointerover=e=>{const c=e.target.closest('[data-k]');if(!c)return;const k=c.dataset.k;$("#gedge").querySelectorAll('line').forEach(l=>{const e=GEDG[+l.dataset.e];l.style.opacity=e.a===k||e.b===k?1:.035;if(e.a===k||e.b===k)l.setAttribute('stroke-opacity','.85')})};
   $("#gnode").onpointerout=()=>{$("#gedge").querySelectorAll('line').forEach(l=>{l.style.opacity=1;l.setAttribute('stroke-opacity',l.dataset.op)})};
@@ -4029,11 +4322,11 @@ function renderNet(){
  let keys,links,objects;
  if(grouped){buildGroups();keys=[...GRP.keys()];objects=GRP;
    links=GEDG.map((e,i)=>({a:e.a,b:e.b,w:e.w,c:e.c,l:e.l,index:i}));
- }else{keys=VIS.slice();objects=new Map(keys.map(i=>[i,{label:NODES[i].name,inst:NODES[i].inst,dept:NODES[i].dept,k:NODES[i].k,node:i,n:1}]));
+ }else{keys=VIS.slice();objects=new Map(keys.map(i=>[i,{label:NODES[i].name,inst:NODES[i].inst,dept:NODES[i].dept,xu:NODES[i].xu,k:NODES[i].k,node:i,n:1}]));
    links=EDG.map((e,i)=>({a:e[0],b:e[1],w:e[2],c:e[3],l:e[4],index:i}));}
  const degree=new Map(keys.map(k=>[k,0]));links.forEach(e=>{degree.set(e.a,degree.get(e.a)+1);degree.set(e.b,degree.get(e.b)+1)});
  const internal=SEL.inst&&SEL.node==null&&$("#scope").value==='within';
- const category=k=>internal?(objects.get(k).dept||'非名冊／系所未提供'):(objects.get(k).inst?.n||objects.get(k).inst||objects.get(k).label);
+ const category=k=>internal?(objects.get(k).dept||'非名冊／其他系所或不明'):(objects.get(k).inst?.n||objects.get(k).inst||objects.get(k).label);
  const names=[...new Set(keys.map(category))].sort();
  const color=k=>PAL[names.indexOf(category(k))%PAL.length];
  keys.sort((a,b)=>String(objects.get(a).inst||"").localeCompare(String(objects.get(b).inst||""))||String(a).localeCompare(String(b)));
@@ -4069,7 +4362,7 @@ function renderNet(){
  const x=count?Math.min(...xs)-110:-300,y=count?Math.min(...ys)-65:-200;
  netVB={x,y,w:count?Math.max(...xs)-x+110:600,h:count?Math.max(...ys)-y+80:400};setNetVB(netVB);
  nsvg.innerHTML=links.map((e,i)=>{const p=pos.get(e.a),q=pos.get(e.b);return `<line data-link="${i}" x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${e.l?'#d1583a':'#527fa8'}" stroke-opacity=".55" stroke-width="${Math.min(5,.8+Math.sqrt(e.c))}" vector-effect="non-scaling-stroke" class="edge"><title>${esc(objects.get(e.a).label)} — ${esc(objects.get(e.b).label)}：${e.c} 筆</title></line>`}).join("")+
- keys.map((k,j)=>{const p=pos.get(k),o=objects.get(k),rr=radius(k),full=o.label+(grouped?'':` · ${o.inst||'機構不明'}${o.dept?' · '+o.dept:''}`);
+ keys.map((k,j)=>{const p=pos.get(k),o=objects.get(k),rr=radius(k),full=o.label+(grouped?'':` · ${o.inst||'機構不明'}${(o.xu||o.dept)?' · '+(o.xu||o.dept):''}`);
  return `<g data-key="${j}" class="netperson"><circle class="nd${!grouped&&o.k?' ext':''}${k===focal?' sel':''}" style="fill:${color(k)};fill-opacity:${!grouped&&o.k?.25:1}" cx="${p[0]}" cy="${p[1]}" r="${rr}" fill="${color(k)}"><title>${esc(full)} · ${degree.get(k)} 條關係</title></circle><text x="${p[0]+rr+4}" y="${p[1]+4}" style="font-size:12px;paint-order:stroke;stroke:#fcfcfd;stroke-width:3px;fill:#263c51" ${!$("#names").checked&&count>65&&k!==focal&&(grouped?(String(k)[0]==='B'&&o.n<5):o.k||degree.get(k)<2)?'class="hoverlabel"':''}>${esc(o.label)}</text></g>`}).join("");
  $("#netnote").textContent=(grouped?'機構彙總':SEL.node!=null?'個人與直接合作對象':'機構成員與合作對象')+` · ${count} 節點 / ${links.length} 關係 · 顏色＝${internal?"系所":"機構"}，紅框＝非名冊 · 懸停顯示姓名／凸顯連線 · 滾輪縮放、空白處拖曳`;
  nsvg.onclick=e=>{if(netMoved)return;const nd=e.target.closest('[data-key]'),ln=e.target.closest('[data-link]');
@@ -4095,6 +4388,15 @@ function crumb(){const p=['<b>全台</b>'];
   $("#crumb").innerHTML=p.join(" › ");
   $("#back").hidden=!(SEL.county||SEL.inst||SEL.node!=null);
   writeHash()}
+function xdept(n){return n.xu?n.xu+(n.dept&&n.dept!==n.xu?`（＝${n.dept}）`:""):"不明"}
+// 非名冊作者依系所分組：對到名冊系所的用中文系名，其餘用署名上的系所原文，拆不出來的放最後
+function extGroups(list){const g=new Map();
+  list.forEach(([n,i])=>{const k=n.dept||n.xu||"系所不明";if(!g.has(k))g.set(k,[]);g.get(k).push([n,i])});
+  const ks=[...g.keys()].sort((a,b)=>(a==="系所不明")-(b==="系所不明")||g.get(b).length-g.get(a).length||a.localeCompare(b));
+  return `<div class="k">系所從論文署名拆出（不是名冊資料）；${list.filter(([n])=>n.xu).length}/${list.length} 位拆得出系所。</div>`+
+    ks.map(k=>`<details${g.get(k).length<=12||ks.length<=3?" open":""}><summary>${esc(k)}（${g.get(k).length}）</summary><ul class="lst">`+
+      g.get(k).sort((a,b)=>a[0].name.localeCompare(b[0].name)).map(([n,i])=>`<li data-n="${i}">${esc(n.name)}`+
+        `${n.dept&&n.xu&&n.xu!==n.dept?`<span class="m"> · ${esc(n.xu)}</span>`:""}</li>`).join("")+`</ul></details>`).join("")}
 function rows(o){return o.filter(r=>r[1]!==""&&r[1]!=null)
   .map(r=>`<div class="row"><span class="k">${r[0]}</span><b>${esc(r[1])}</b></div>`).join("")}
 function chart(years){const y0=D.years[0],y1=D.years[1],n=y1-y0+1;
@@ -4131,8 +4433,7 @@ function selectInst(code,quiet){const inst=D.insts.find(i=>i.c===code); if(!inst
           ["2015–2026 論文",inst.np],["2015–2026 計畫",inst.nj],["非名冊共同作者",ex.length]])+
     `<h3>名冊教師（${ros.length}）</h3><ul class="lst">`+ros.sort((a,b)=>(+b[0].np||0)-(+a[0].np||0))
       .map(([n,i])=>`<li data-n="${i}">${esc(n.name)}<span class="m"> · ${esc(n.dept)} · 論文 ${n.np}</span></li>`).join("")+`</ul>`+
-    (ex.length?`<h3>非名冊共同作者（${ex.length}）<span class="pill ext">不是名冊經濟學家</span></h3><ul class="lst">`+
-      ex.slice(0,60).map(([n,i])=>`<li data-n="${i}">${esc(n.name)}</li>`).join("")+`</ul>`:"");
+    (ex.length?`<h3>非名冊共同作者（${ex.length}）<span class="pill ext">不是名冊經濟學家</span></h3>`+extGroups(ex):"");
   build();}
 function linkRow(label,url,note){ if(!url)return "";
   const short=url.replace(/^https?:\/\//,"").replace(/\/$/,"");
@@ -4145,8 +4446,18 @@ function selectNode(i,quiet){const n=NODES[i];if(!n)return;
   const js=(n.ji||[]).map(k=>D.projects[k]).sort((a,b)=>b[1]-a[1]);
   $("#details").innerHTML=`<span class="back" data-up="1">← 回 ${esc((D.insts.find(x=>x.c===n.ic)||{}).n||"上一層")}</span>
     <h2>${esc(n.name)} ${n.k?'<span class="pill ext">非名冊</span>':'<span class="pill">名冊教師</span>'}</h2>`+
-    rows([["機構",n.inst],["系所",n.dept],["2015–2026 論文",n.np],["2015–2026 計畫",n.nj],
+    rows([["身分",n.k?"非名冊（不在 520 位名冊上）":"名冊教師"],
+          ["機構",n.k&&n.ic?((D.insts.find(x=>x.c===n.ic)||{}).n||n.inst):(n.bi!=null&&!BUB[n.bi].pole?BUB[n.bi].label:n.inst)],
+          ["機構類型",n.k?(n.ic?"名冊機構（27 校）":n.bi==null?"":BUB[n.bi].pole?"不明":BUB[n.bi].org==="third"?"第三機構":BUB[n.bi].cc==="TW"?"台灣其他機構":"國外機構"):""],
+          ["系所",n.k?xdept(n):n.dept],["機構資料來源",n.k?n.src:""],
+          ["性別",n.g?({M:"男",F:"女"}[n.g]||n.g)+({manual:"（人工標註）",nstc_basic:"（國科會基本資料）"}[n.gs]||""):""],
+          ["博士學校",n.ph&&n.ph[0]?n.ph[0]+(n.ph[1]?`（${n.ph[1]}）`:""):""],
+          ["博士領域",n.ph?n.ph[2]:""],["博士年份",n.ph?n.ph[3]:""],
+          ["2015–2026 論文",n.np],["2015–2026 計畫",n.nj],
           ["OpenAlex 總發表",n.oapub],["OpenAlex 總被引",n.cite]])+
+    (n.k?`<div class="k">${n.xu?`系所來源：${esc(n.xs)}${n.xa&&n.xa.length?`；其他署名寫法：${esc(n.xa.join("、"))}`:""}<br>署名原文：${esc(n.xr)}`
+      :`系所不明：署名沒有寫系所，或沒有可對到這個機構的署名。${n.ar?`<br>機構原文：${esc(n.ar)}`:""}`}</div>`:"")+
+    (n.ph&&n.ph[5]?linkRow("博士學歷依據",n.ph[5],n.ph[4]&&!["high","web_verified"].includes(n.ph[4])?`可信度 ${n.ph[4]}`:""):"")+
     (n.em||n.or||n.pf||n.pw||n.ns||n.cv||n.oa?`<h3>聯絡與連結</h3>`+
       (n.em?`<div class="row"><span class="k">Email</span><b><a href="mailto:${esc(n.em)}">${esc(n.em)}</a></b></div>`:"")+
       (n.or?linkRow("ORCID",n.or.startsWith("http")?n.or:"https://orcid.org/"+n.or):"")+
@@ -4162,13 +4473,14 @@ function selectNode(i,quiet){const n=NODES[i];if(!n)return;
       .map(p=>`<li>${esc(p[0])}<div class="m">${p[1]} · ${esc(p[2])}</div></li>`).join("")+`</ul>`:"");
   build();}
 function showBubble(i){const b=BUB[i-N],vis=new Set(VIS),mem=b.members.filter(i=>vis.has(i));
-  const src={wikidata:"Wikidata 機構座標",openalex:"OpenAlex／ROR 城市座標（非機構本身）"}[b.src]||"";
+  const src={wikidata:"Wikidata 機構座標",openalex:"OpenAlex／ROR 城市座標（非機構本身）",manual:"人工確認的地址座標"}[b.src]||"";
   $("#details").innerHTML=`<span class="back" data-up="0">← 回全台</span>
     <h2>${esc(b.label)} <span class="pill">${b.n} 位共同作者</span></h2>`+
     (b.pole?`<div class="k">${b.unknown?"原始資料沒有這些作者的機構。":"有機構名稱，但查不到可靠的機構位置。"}暫時放在北極，不代表實際所在地。</div>`
-      :rows([["國家",b.country],["城市",b.city],["與台灣的大圓距離",b.km!=null?b.km.toLocaleString()+" km":""],["座標來源",src]]))+
+      :rows([["機構類型",b.org==="third"?"第三機構（企業、金融、醫療等非學術單位）":(b.cc==="TW"?"台灣其他機構（名冊 27 校以外）":"國外機構")],["國家",b.country],["城市",b.city],["與台灣的大圓距離",b.km!=null?b.km.toLocaleString()+" km":""],["座標來源",src]]))+
     `<h3>${b.pole?"資料中的機構名稱":"資料中的機構寫法"}</h3>`+rows(b.top.map(t=>[t[0],t[1]+" 人"]))+
-    `<h3>目前可見作者（${mem.length}）</h3><ul class="lst">`+mem.map(i=>`<li data-n="${i}">${esc(NODES[i].name)}<div class="m">${esc(NODES[i].inst)}</div></li>`).join("")+`</ul>`}
+    `<h3>這個機構的共同作者（${b.members.length}）</h3>`+(mem.length<b.members.length?`<div class="k">目前篩選下可見 ${mem.length} 位；清單列出全部。</div>`:"")+
+    extGroups(b.members.map(i=>[NODES[i],i]))}
 function showMapEdge(k){const e=GEDG[k];if(!e)return;const a=GRP.get(e.a),b=GRP.get(e.b);
  const pairs=e.pairs.map(([a,b])=>EDG.findIndex(x=>x[0]===a&&x[1]===b&&x[4]===e.l)).filter(i=>i>=0);
  const records=new Set(pairs.flatMap(i=>[...EDG[i][5]]));
@@ -4187,7 +4499,7 @@ $("#side").addEventListener("click",e=>{const li=e.target.closest("li,.back"); i
   else if(li.dataset.c)selectCounty(li.dataset.c);
   else if(li.dataset.i)selectInst(li.dataset.i);
   else if(li.dataset.n)selectNode(+li.dataset.n)});
-function legendHTML(){if($("#view").value==='net')return `<div class="note">藍線＝共著，橘線＝計畫；線寬依合作成果筆數。個人節點越大，合作關係越多；彙總節點依作者人數縮放。校內顏色＝系所，跨機構顏色＝機構；紅框＝非名冊作者。單點代表目前條件下無合作連線。懸停顯示姓名並凸顯直接合作，可勾「所有姓名」。<br>位置是網路排列，沒有地理意義。預設只顯示涉及名冊作者的合作，可勾「含非名冊彼此合作」展開其他連線。</div>`;return `<div class="note"><b>閱讀方式</b><br>地圖：節點面積隨目前篩選下的作者人數縮放（小點有最小可點擊尺寸）；藍線＝共著，橘線＝計畫，線寬＝作者配對合作筆數。點機構看校內網路，點作者看直接合作對象。<br>整張圖是以台灣為中心的方位等距投影：離台灣的距離與方位都按真實比例，從台灣出發的直線就是大圓航線。非名冊機構（含海外）以灰點畫在機構座標上，大小＝作者人數；座標優先用 Wikidata 的機構位置，查不到時用 OpenAlex／ROR 的城市座標。找不到機構或位置的作者暫放北極（虛線圓）。預設視野是台灣，滾輪縮小或按「看全世界」看海外；懸停節點凸顯合作連線。北部機構較密：全台視野時臺北市、新北市只顯示臺大、政大、中研院經濟所與臺北大學，宜蘭大學、佛光大學、臺灣海洋大學、銘傳大學也先不顯示，bubble 也畫得比較小；點進縣市或放大（右下角放大鏡）後才顯示全部機構並恢復大小。</div>`}
+function legendHTML(){if($("#view").value==='net')return `<div class="note">藍線＝共著，橘線＝計畫；線寬依合作成果筆數。個人節點越大，合作關係越多；彙總節點依作者人數縮放。校內顏色＝系所（非名冊作者對得到名冊系所時同色，其餘歸「非名冊／其他系所或不明」），跨機構顏色＝機構；紅框＝非名冊作者。單點代表目前條件下無合作連線。懸停顯示姓名並凸顯直接合作，可勾「所有姓名」。<br>位置是網路排列，沒有地理意義。預設只顯示涉及名冊作者的合作，可勾「含非名冊彼此合作」展開其他連線。</div>`;return `<div class="note"><b>閱讀方式</b><br>地圖：節點面積隨目前篩選下的作者人數縮放（小點有最小可點擊尺寸）；藍線＝共著，橘線＝計畫，線寬＝作者配對合作筆數。點機構看校內網路，點作者看直接合作對象。<br>整張圖是以台灣為中心的方位等距投影：離台灣的距離與方位都按真實比例，從台灣出發的直線就是大圓航線。藍圓＝名冊 27 校；灰點＝名冊以外的機構（台灣其他機構與海外），大小＝作者人數；<b style="color:#b8651a">橘點＝第三機構</b>（企業、金融、醫療等非學術單位），永遠畫在最上層、不會被收起來。座標優先用 Wikidata 的機構位置，查不到時用 OpenAlex／ROR 的城市座標，少數由人工確認地址。任職名冊 27 校、但不在名冊上的人（系外同事、研究生等）畫在該校，標「非名冊」。非名冊作者的系所是從論文署名拆出來的，個人頁會列出來源與署名原文。找不到機構或位置的作者暫放北極（虛線圓）。預設視野是台灣，滾輪縮小或按「看全世界」看海外；懸停節點凸顯合作連線。北部機構較密：全台視野時臺北市、新北市只顯示臺大、政大、中研院經濟所與臺北大學，宜蘭大學、佛光大學、臺灣海洋大學、銘傳大學也先不顯示，bubble 也畫得比較小；點進縣市或放大（右下角放大鏡）後才顯示全部機構並恢復大小。</div>`}
 function updateFocusInfo(){
  const title=SEL.node!=null?"個人合作網路":SEL.inst?"機構合作網路":SEL.county?"縣市合作":"全台合作";
  const partners=SEL.node!=null?[...new Set(EDG.flatMap(e=>e.slice(0,2)).filter(i=>i!==SEL.node))]:[];
@@ -4218,7 +4530,7 @@ def stage9_html(outfile=None):
     html = (HTML_TEMPLATE
             .replace('__DATA__', json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('<', r'\u003c'))
             .replace('__Y0__', str(YEAR_MIN)).replace('__Y1__', str(YEAR_MAX)))
-    outdir = os.path.join(FINAL, 'figures')
+    outdir = HTML_OUT
     os.makedirs(outdir, exist_ok=True)
     out = outfile or os.path.join(outdir, 'map_explorer.html')
     if not os.path.isabs(out):
@@ -4234,15 +4546,176 @@ def stage9_html(outfile=None):
 # ═══════════════════════════════════════════════════════════════
 # 進入點
 # ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
+# 階段 8：把 HTML 與分析要用、但需要快取／上游原始網頁才算得出來的資料寫進 input/
+#   input/map/external_places.csv           外部作者 → 機構位置、第三機構標記
+#   input/professor_demo/external_departments.csv  外部作者 → 從署名拆出的系所
+#   input/project/grants.csv                國科會計畫（含核定金額）
+# 之後 HTML（--html）與 load_data() 只讀 input/，不再碰快取或上游。
+# ═══════════════════════════════════════════════════════════════
+PLACE_FIELDS = ['node_id', 'place_type', 'institution_code', 'place_key', 'label', 'country', 'city',
+                'lat', 'lon', 'src', 'org_type']
+DEPT_FIELDS = ['node_id', 'unit', 'dept', 'src', 'raw', 'alt_json']
+
+
+def _roster_code_fn(inst_rows):
+    code_by_key = {}
+    for r in inst_rows:
+        for nm in (r['institution_name'], r['institution_en']):
+            if nm:
+                code_by_key[_norm_inst(nm)] = r['institution_code']
+
+    def roster_code(name):
+        k = _norm_inst(name)
+        return code_by_key.get(_norm_inst(INST_ALIAS[k])) if k in INST_ALIAS else code_by_key.get(k)
+    return roster_code
+
+
+def export_external_places():
+    """外部作者的位置（與 HTML 地圖同一套規則）：名冊 27 校／其他機構座標；查不到的不寫。"""
+    inst_rows = rd('final_plan', 'input', 'map', 'institutions.csv')
+    code_by_name = {r['institution_name']: r['institution_code'] for r in inst_rows}
+    _, meta, _ = build_map_positions(show_external=True, show_unknown=True)
+    _, _, ext = read_master()
+    info = {r['node_id']: r for r in ext}
+    places = {nid: {'roster': code_by_name[m['inst']]} for nid, m in meta.items()
+              if m['kind'] == 'ext_at_roster' and m.get('inst') in code_by_name}
+    places.update(external_institution_places(
+        [info[n] for n, m in meta.items() if m['kind'] == 'ext_region'], _roster_code_fn(inst_rows)))
+    rows = []
+    for nid in sorted(places):
+        p = places[nid]
+        if 'roster' in p:
+            rows.append(dict(node_id=nid, place_type='roster', institution_code=p['roster'], place_key='',
+                             label='', country='TW', city='', lat='', lon='', src='roster', org_type=''))
+        else:
+            rows.append(dict(node_id=nid, place_type='institution', institution_code='', place_key=p['key'],
+                             label=p['label'], country=p['cc'], city=p['city'], lat=p['lat'], lon=p['lon'],
+                             src=p['src'], org_type=p.get('org', '')))
+    path = out('map', 'external_places.csv')
+    write(path, rows, PLACE_FIELDS)
+    print(f'  外部作者位置：{len(rows)} 位 → {os.path.relpath(path, ROOT)}')
+    return {r['node_id']: r for r in rows}
+
+
+def export_external_departments(places):
+    """外部作者的系所（從署名拆出來，規則見 external_departments）。"""
+    inst_rows = rd('final_plan', 'input', 'map', 'institutions.csv')
+    inst_by_code = {r['institution_code']: r for r in inst_rows}
+    _, roster, ext = read_master()
+    geo = {r['teacher_id']: r for r in rd('final_plan', 'input', 'map', 'professor_geo.csv')}
+    roster_depts = collections.defaultdict(set)
+    for r in roster:
+        g = geo.get(r['teacher_id'])
+        if g and g['lat'] and g['lon']:
+            roster_depts[g['institution_code']].add(r['department_zh'] or '（未填系所）')
+
+    def code_of(r):
+        p = places.get(r['node_id'])
+        return p['institution_code'] if p and p['place_type'] == 'roster' else ''
+
+    def inst_names_of(r):
+        names = {_norm_inst(r.get('affil_institution_norm'))}
+        p = places.get(r['node_id'])
+        ii = inst_by_code.get(code_of(r))
+        if ii:
+            names |= {_norm_inst(ii['institution_name']), _norm_inst(ii['institution_en'])}
+            names |= {k for k, v in INST_ALIAS.items() if v == ii['institution_name']}
+        elif p:
+            names.add(_norm_inst(p['label']))
+        return {x for x in names if len(x) > 4}
+
+    depts = external_departments(ext, inst_names_of, lambda r: roster_depts.get(code_of(r), set()))
+    rows = [dict(node_id=nid, unit=x['unit'], dept=x['dept'], src=x['src'], raw=x['raw'][:200],
+                 alt_json=j(x['alt'])) for nid, x in sorted(depts.items())]
+    path = out('professor_demo', 'external_departments.csv')
+    write(path, rows, DEPT_FIELDS)
+    print(f'  外部作者系所：{len(rows)}/{len(ext)} 位 → {os.path.relpath(path, ROOT)}')
+
+
+def export_grants():
+    """國科會計畫紀錄＋核定金額，一列一筆原始紀錄（nstc_projects.csv 的 record_id）。
+
+    金額不在 nstc_projects.csv：原本的爬蟲只存了前五欄。這裡從快取的原始網頁（前置data處理/collab_pubs/raw_html/nstc）
+    重新解析「核定經費(新台幣)」，逐列對回原始 CSV（同一頁、同順序，並核對年度、名稱、角色）。
+    多年期計畫：2006 年後大多只列一筆、金額為全期總額，用「到下一筆專題研究計畫的間隔」推估年數（上限 3）。
+    欄位：原始欄位＋ aligned, amount, year, is_pi, marked, node_id, gap_next, dur, amount_per_year"""
+    pubs = os.path.join(UPSTREAM, 'collab_pubs')
+    sys.path.insert(0, os.path.join(pubs, 'code', 'searching'))
+    from common import table_rows
+    from fetch_nstc import BASE_URL, PROJ_ACTION, PROJ_HEADER, header_index, rsno_of
+    amt_col = '核定經費(新台幣)'
+    raw = read(SRC_PROJECTS)
+    people = [r for r in rd('final_plan', 'input', 'professor_demo', 'authors_master.csv') if r['teacher_id']]
+    people += rd('final_plan', 'input', 'professor_demo', 'professors_inactive.csv')
+    url_of, node_of = {}, {}
+    for r in people:
+        url_of.setdefault(r['teacher_id'], r.get('nstc_url') or '')
+        if r.get('node_id'):
+            node_of[r['teacher_id']] = r['node_id']
+    by_teacher = collections.defaultdict(list)
+    for r in raw:
+        by_teacher[r['teacher_id']].append(r)
+    parsed = {}
+    for tid, g in by_teacher.items():
+        rs = rsno_of(url_of.get(tid, '')) if url_of.get(tid) else ''
+        if not rs:
+            continue
+        h = hashlib.sha1(BASE_URL.format(action=PROJ_ACTION, rsno=rs).encode('utf-8')).hexdigest()
+        path = os.path.join(pubs, 'raw_html', 'nstc', h[:2], h + '.html')
+        if not os.path.exists(path):
+            continue
+        html = open(path, encoding='utf-8', errors='ignore').read()
+        idx = header_index(html, PROJ_HEADER + [amt_col])
+        if idx is None:
+            continue
+        n_th = len(re.findall(r'(?is)<th[^>]*>(.*?)</th>', html))
+        page = [x for x in table_rows(html) if len(x) == n_th]
+        for rec, x in zip(g, page):
+            ok = (x[idx['年度']] == rec['roc_year'] and x[idx['計畫名稱']] == rec['project_title']
+                  and x[idx['擔任工作']] == rec['role'])
+            a = re.sub(r'[^\d]', '', x[idx[amt_col]])
+            parsed[rec['record_id']] = (ok, float(a) if a else None)
+    rows = []
+    for r in raw:
+        ok, amount = parsed.get(r['record_id'], (False, None))
+        y = int(r['roc_year']) + 1911 if r['roc_year'].strip().isdigit() else None
+        rows.append(dict(r, aligned=ok, amount=amount, year=y,
+                         is_pi=('主持人' in r['role'] and '共同' not in r['role']),
+                         marked=bool(re.search(r'\(\d/\d\)|（\d/\d）', r['project_title'])),
+                         node_id=node_of.get(r['teacher_id'], '')))
+    research = lambda r: r['grant_category'].startswith('專題研究計畫')  # noqa: E731
+    seq = sorted((r for r in rows if r['is_pi'] and research(r) and r['year'] is not None),
+                 key=lambda r: (r['teacher_id'], r['year']))
+    for a_, b_ in zip(seq, seq[1:] + [None]):
+        a_['gap_next'] = b_['year'] - a_['year'] if b_ and b_['teacher_id'] == a_['teacher_id'] else None
+    for r in rows:
+        r.setdefault('gap_next', None)
+        multi = r['is_pi'] and research(r) and not r['marked'] and (r['year'] or 0) >= 2006
+        r['dur'] = int(min(max(r['gap_next'] or 1, 1), 3)) if multi else 1
+        r['amount_per_year'] = r['amount'] / r['dur'] if r['amount'] is not None else None
+    fields = list(raw[0].keys()) + ['aligned', 'amount', 'year', 'is_pi', 'marked', 'node_id',
+                                    'gap_next', 'dur', 'amount_per_year']
+    path = out('project', 'grants.csv')
+    write(path, rows, fields)
+    print(f'  國科會計畫（含金額）：{len(rows)} 筆，對齊 {sum(r["aligned"] for r in rows)} 筆 → {os.path.relpath(path, ROOT)}')
+
+
+def stage8_derived():
+    places = export_external_places()
+    export_external_departments(places)
+    export_grants()
+
+
 STAGES = [
     (1, 'fix_author_lists', lambda a: stage1_fix_author_lists()),
     (2, 'build',            lambda a: stage2_build()),
-    (3, 'enrich',           lambda a: stage3_enrich(fetch=not a.offline,
-                                                    search_teachers=not a.offline)),
+    (3, 'enrich',           lambda a: stage3_enrich()),             # --offline 時只讀快取
     (4, 'journal_pdf',      lambda a: stage4_journal()),
     (5, 'crossref',         lambda a: stage5_crossref()),
     (6, 'external_affil',   lambda a: stage6_external()),
     (7, 'review_sheets',    lambda a: stage7_sheets()),
+    (8, 'derived',          lambda a: stage8_derived()),            # 地點、系所、經費 → input/
 ]
 
 
@@ -4251,7 +4724,7 @@ def main():
     ap = argparse.ArgumentParser(
         description='final_plan 全流程；加 --map 則改成畫地圖網路圖')
     ap.add_argument('--stage', nargs='*', type=int,
-                    help='只跑指定階段（預設 1 2 3 4 6 7；第 5 階段要自己指定）')
+                    help='只跑指定階段（預設 1 2 3 4 6 7 8；第 5 階段要自己指定）')
     g = ap.add_argument_group('畫地圖（--map）')
     g.add_argument('--map', action='store_true', help='畫地圖網路圖，不跑其他階段')
     g.add_argument('--layer', choices=['pub', 'proj', 'both'], default='pub',
@@ -4264,11 +4737,11 @@ def main():
     g.add_argument('--year-to', type=int, default=YEAR_MAX)
     g.add_argument('--min-weight', type=float, default=0.0,
                    help='邊的權重下限，用來把圖畫疏一點')
-    g.add_argument('--out', help='輸出檔名（預設放在 final_plan/figures/）')
+    g.add_argument('--out', help='輸出檔名（預設放在 final_plan/output/html/）')
     g.add_argument('--all', action='store_true',
                    help='把常用的幾種組合一次全畫出來')
     g.add_argument('--html', action='store_true',
-                   help='產生單一檔案的互動式地圖（figures/map_explorer.html）')
+                   help='產生單一檔案的互動式地圖（output/html/map_explorer.html）')
     ap.add_argument('--with-crossref', action='store_true',
                     help='把第 5 階段（Crossref）也納入。它要跑約 30 分鐘、收穫很少')
     ap.add_argument('--offline', action='store_true',
@@ -4292,7 +4765,7 @@ def main():
                        min_weight=a.min_weight, outfile=a.out if not a.all else None)
         return
 
-    want = set(a.stage) if a.stage else ({1, 2, 3, 4, 6, 7} | ({5} if a.with_crossref else set()))
+    want = set(a.stage) if a.stage else ({1, 2, 3, 4, 6, 7, 8} | ({5} if a.with_crossref else set()))
     for n, name, fn in STAGES:
         if n not in want:
             continue

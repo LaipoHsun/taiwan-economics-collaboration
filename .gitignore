@@ -3,12 +3,41 @@
 !/.gitignore
 !/README.md
 !/index.html
+!/build.py
+
+# Code: pipeline, map entry point, analysis loader
 !/code/
 /code/*
-!/code/pipeline.py
-!/html/
-/html/*
-!/html/map_explorer.html
+!/code/pipeline/
+/code/pipeline/*
+!/code/pipeline/pipeline.py
+!/code/pipeline/roster_attributes.py
+!/code/html/
+/code/html/*
+!/code/html/build_map.py
+!/code/analysis/
+/code/analysis/*
+!/code/analysis/load_data.py
+
+# Map
+!/output/
+/output/*
+!/output/html/
+/output/html/*
+!/output/html/map_explorer.html
+
+# Analyses: programs and figures only (notes stay local)
+!/analyses/
+/analyses/*
+!/analyses/funding_analysis/
+!/analyses/collaboration_analysis/
+/analyses/*/*
+!/analyses/*/code/
+!/analyses/*/output/
+/analyses/*/code/*
+!/analyses/*/code/*.py
+/analyses/*/output/*
+!/analyses/*/output/*.png
 
 # Never publish standalone datasets, caches, credentials or local state.
 *.csv
@@ -39,6 +68,7 @@ __pycache__/
 venv/
 cache/
 raw_data/
+input/
 raw_html/
 manual_review/
 .local-backup/
